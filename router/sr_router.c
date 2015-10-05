@@ -78,7 +78,31 @@ void sr_handlepacket(struct sr_instance* sr,
 
   printf("*** -> Received packet of length %d \n",len);
 
-  /* fill in code here */
+  /* Check ethertype of packet */
+  uint16_t ethtype = ethertype(packet);
+  if ( ethtype == ethertype_ip) {
+    printf("Just recieved an ip packet!");
+  } else if (ethtype == ethertype_arp) {
+    sr_ethernet_hdr_t *ethHeader = (sr_ethernet_hdr_t *)packet;
+    print_hdrs((uint8_t*)ethHeader, len);
+      
+   
+    int pos = 0;
+    for (; pos < ETHER_ADDR_LEN; pos++) {
+      ethHeader->ether_dhost[pos] = ethHeader->ether_shost[pos];
+    }
+    /* print_hdr_eth((uint8_t*)ethHeader); */
 
+    struct sr_if * iface;
+    
+    iface = sr_get_interface(sr, interface);
+    
+    pos = 0;
+    for (; pos < ETHER_ADDR_LEN; pos++) {
+      ethHeader->ether_shost[pos] = iface->addr[pos];
+    }
+    sr_send_packet(sr, packet, len, interface);
+    
+  }
 }/* end sr_ForwardPacket */
 
