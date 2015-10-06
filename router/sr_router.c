@@ -35,6 +35,18 @@ void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_ad
   }
 }
 
+int destinedForRouterInterface(struct  sr_instance* sr, uint32_t destIP) {
+  /* TODO:// */
+  struct sr_if * current_if = sr->if_list;
+  /*
+  while(current_if!= 0)
+    {
+      current_if->ip = destIP
+    }
+    */
+  return 1;
+}
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -90,42 +102,51 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
-
   /* Check ethertype of packet */
   uint16_t ethtype = ethertype(packet);
   if ( ethtype == ethertype_ip) {
     printf("Just recieved an ip packet! \n");
     
-    sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-    
-    icmpHeader->icmp_type = ntohs(0);
-    /* icmpHeader->icmp_sum = 0; */
-    sr_ip_hdr_t* IpHeader =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-    struct sr_if * current = sr->if_list;
-    int ipInRouter = 0;
+    unsigned int ethAddressHeaderLength = sizeof(sr_ethernet_hdr_t);
+    sr_ip_hdr_t * ipHeader = (sr_ip_hdr_t *) (packet + ethAddressHeaderLength);
+    print_hdr_ip(ipHeader);
 
-    while(1)
+    unsigned int checksum = ipHeader->ip_sum;
+    ipHeader->ip_sum = 0;
+    if(checksum != cksum(ipHeader, ipHeader->ip_hl*4))
     {
-      if(current->ip==IpHeader->ip_dst)
-      {
-          ipInRouter = 1;
-          printf("We find the ip address in the router");
-          sr_print_if(current);
-          break;
+      printf("checksum %d: \n", checksum);
+      printf("sum of ipheader %d: \n", cksum(ipHeader, ipHeader->ip_hl*4));
+      printf("Bad ip checksum\n");
+    }
+
+    if(destinedForRouterInterface(sr, ipHeader->ip_dst))
+    {
+      if (ipHeader->ip_p == 1) {/* check if recieved ip packet contains an ICMP header */
+        sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(packet + ethAddressHeaderLength + sizeof(sr_ip_hdr_t));
+        print_hdr_icmp(icmpHeader);
       }
-      current = current->next; 
-      sr_print_if(current);
-    }
+    } else {
 
-/*
-    if_walker = sr->if_list;
-    
-    sr_print_if(if_walker);
-    while(if_walker->next)
-    {
-        
     }
-  */ 
+    /* First check ip packet
+      -checksum the ipheader
+      -decrement TTL
+      -check destination
+      -if destination = one of our interfaces
+        -if type = icmp echo request
+            checksum the icmp header
+            send echo reply back
+        -if type == tcp or udp
+          -send icmp port unreachable
+        -else do nothing
+      -else ????????
+    */
+ 
+    /* icmpHeader->icmp_sum = 0; */
+    /*
+    sr_ip_hdr_t* IpHeader =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    */
 
 
   } else if (ethtype == ethertype_arp) {
