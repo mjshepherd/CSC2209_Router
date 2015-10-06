@@ -111,7 +111,7 @@ void sr_handlepacket(struct sr_instance* sr,
     sr_ip_hdr_t * ipHeader = (sr_ip_hdr_t *) (packet + ethAddressHeaderLength);
     print_hdr_ip(ipHeader);
 
-    unsigned int checksum = ipHeader->ip_sum;
+    uint16_t checksum = ipHeader->ip_sum;
     ipHeader->ip_sum = 0;
     if(checksum != cksum(ipHeader, ipHeader->ip_hl*4))
     {
@@ -124,7 +124,17 @@ void sr_handlepacket(struct sr_instance* sr,
     {
       if (ipHeader->ip_p == 1) {/* check if recieved ip packet contains an ICMP header */
         sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(packet + ethAddressHeaderLength + sizeof(sr_ip_hdr_t));
-        print_hdr_icmp(icmpHeader);
+        if (icmpHeader->icmp_type == 8) {
+          /* check that sum */
+          checksum = icmpHeader->icmp_sum;
+          icmpHeader->icmp_sum = 0;
+          printf("Checksum recieved with icmp: %d\n", checksum);
+          printf("ip lendth %d\n", ntohs(ipHeader->ip_len));
+          printf("ip header lendth: %d\n", ipHeader->ip_hl);
+          printf("Checksum of zeroed icmp: %d\n", cksum(icmpHeader, 37*4));
+          /* reply with icmp message*/
+
+        }
       }
     } else {
 
