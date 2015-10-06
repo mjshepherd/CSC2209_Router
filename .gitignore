@@ -1,0 +1,9 @@
+*.d
+*.pyc
+*.pyo
+*.o
+sr
+/http_server1/*
+/http_server2/*
+pox
+pox_module/*
