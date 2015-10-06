@@ -22,6 +22,19 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+
+void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_address, uint8_t * source_address)
+{
+  int pos = 0;
+  for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+    ethHeader->ether_dhost[pos] = destination_address[pos];
+  }
+
+  for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+    ethHeader->ether_shost[pos] = source_address[pos];
+  }
+}
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -81,28 +94,64 @@ void sr_handlepacket(struct sr_instance* sr,
   /* Check ethertype of packet */
   uint16_t ethtype = ethertype(packet);
   if ( ethtype == ethertype_ip) {
-    printf("Just recieved an ip packet!");
-  } else if (ethtype == ethertype_arp) {
-    sr_ethernet_hdr_t *ethHeader = (sr_ethernet_hdr_t *)packet;
-    print_hdrs((uint8_t*)ethHeader, len);
-      
-   
-    int pos = 0;
-    for (; pos < ETHER_ADDR_LEN; pos++) {
-      ethHeader->ether_dhost[pos] = ethHeader->ether_shost[pos];
-    }
-    /* print_hdr_eth((uint8_t*)ethHeader); */
+    printf("Just recieved an ip packet! \n");
+    
+    sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    
+    icmpHeader->icmp_type = ntohs(0);
+    /* icmpHeader->icmp_sum = 0; */
+    sr_ip_hdr_t* IpHeader =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    struct sr_if * current = sr->if_list;
+    int ipInRouter = 0;
 
-    struct sr_if * iface;
-    
-    iface = sr_get_interface(sr, interface);
-    
-    pos = 0;
-    for (; pos < ETHER_ADDR_LEN; pos++) {
-      ethHeader->ether_shost[pos] = iface->addr[pos];
+    while(1)
+    {
+      if(current->ip==IpHeader->ip_dst)
+      {
+          ipInRouter = 1;
+          printf("We find the ip address in the router");
+          sr_print_if(current);
+          break;
+      }
+      current = current->next; 
+      sr_print_if(current);
     }
+
+/*
+    if_walker = sr->if_list;
+    
+    sr_print_if(if_walker);
+    while(if_walker->next)
+    {
+        
+    }
+  */ 
+
+
+  } else if (ethtype == ethertype_arp) {
+    int pos = 0;
+    sr_ethernet_hdr_t *ethHeader = (sr_ethernet_hdr_t *)packet;
+    sr_arp_hdr_t *arpHeader = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    struct sr_if * iface;
+    iface = sr_get_interface(sr, interface);
+
+
+    arpHeader->ar_op = ntohs(2);
+    for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+      arpHeader->ar_tha[pos] = arpHeader->ar_sha[pos];
+    }
+    arpHeader->ar_tip = arpHeader->ar_sip;
+    for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+      arpHeader->ar_sha[pos] = iface->addr[pos];
+    }
+    arpHeader->ar_sip = iface->ip;
+
+    set_ethernet_header(ethHeader, ethHeader->ether_shost, iface->addr);
+
     sr_send_packet(sr, packet, len, interface);
     
   }
+
+
 }/* end sr_ForwardPacket */
 
