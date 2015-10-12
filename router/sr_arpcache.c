@@ -11,6 +11,74 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
+
+/* 
+ * This function sends an arp request.
+ */
+void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
+{
+    struct sr_arp_hdr arp_hdr;
+    struct sr_if *interface;
+    
+    /* Get the outgoing interface. */
+    interface = sr_get_interface(sr, req->packets->iface);
+    
+    /* Create a ARP header with the appropriate request information */
+    arp_hdr.ar_hrd = htons(arp_hrd_ethernet);
+    arp_hdr.ar_pro = htons(0x0800);
+    arp_hdr.ar_hln = ETHER_ADDR_LEN;
+    arp_hdr.ar_pln = sizeof(uint32_t);
+    arp_hdr.ar_op = htons(arp_op_request);
+    memcpy(arp_hdr.ar_sha, interface->addr, ETHER_ADDR_LEN);
+    arp_hdr.ar_sip = interface->ip;
+    arp_hdr.ar_tip = req->ip;
+    
+    /* Encapsulate and attempt to send it. */
+    sr_encap_and_send_pkt(sr, 
+                                      (uint8_t *)&arp_hdr, 
+                                            sizeof(struct sr_arp_hdr), 
+                                            req->ip,
+                                            0,
+                                            ethertype_arp);
+}
+
+
+
+/* 
+ * This function sends icmp host unreachable to all packets waiting on the arp request.
+ */
+void send_icmp_host_unreachable(struct sr_instance *sr, struct sr_arpreq *req) {
+    struct sr_packet *cur;
+    
+    cur = req->packets;
+    while (cur != 0) {
+        sr_send_icmp(sr, cur->buf, cur->len, 3, 1);
+        cur = cur->next;
+    }
+}
+
+/* 
+ * This function sends an outstanding arp request again if at least one seconds has 
+ * passed since their last send, and they have already been sent less than 5 times. 
+ * Otherwise, it icmp host unreachable to all packets waiting on this request.
+ */
+void sr_arpreq_handle(struct sr_instance *sr, struct sr_arpreq *req) {
+    if (difftime(time(0), req->sent) > 1.0) {
+    
+        /* Host is not reachable */
+    if (req->times_sent >= 5) {
+            send_icmp_host_unreachable(sr, req);
+            sr_arpreq_destroy(&sr->cache, req);
+            
+        /* Resend ARP request. */
+        } else {
+        send_arp_request(sr, req);
+      req->sent = time(0);
+      req->times_sent++;
+    }
+    }
+}
+
 /* 
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
@@ -18,6 +86,20 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /* Fill this in */
+    
+    struct sr_arpreq *cur;
+    struct sr_arpreq *next;
+    
+    /* Iterate through all outstanding arp requests */
+    cur = sr->cache.requests;
+    if (cur)
+        next = cur->next;
+    while(cur != 0) {
+        sr_arpreq_handle(sr, cur);
+        cur = next;
+        if (cur)
+            next = cur->next;
+    }
 }
 
 /* You should not need to touch the rest of this code. */
@@ -84,7 +166,7 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
         new_pkt->buf = (uint8_t *)malloc(packet_len);
         memcpy(new_pkt->buf, packet, packet_len);
         new_pkt->len = packet_len;
-		new_pkt->iface = (char *)malloc(sr_IFACE_NAMELEN);
+        new_pkt->iface = (char *)malloc(sr_IFACE_NAMELEN);
         strncpy(new_pkt->iface, iface, sr_IFACE_NAMELEN);
         new_pkt->next = req->packets;
         req->packets = new_pkt;
@@ -244,4 +326,3 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     
     return NULL;
 }
-
