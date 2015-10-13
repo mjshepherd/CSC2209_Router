@@ -233,15 +233,14 @@ void sr_handlepacket(struct sr_instance* sr,
         printf("==============================================\n");
         printf("==============================================\n");
         printf("Recieved an ARP packet! \n");
-
+        print_hdrs(packet, len);
+        
         int pos = 0;
         sr_ethernet_hdr_t *ethHeader = (sr_ethernet_hdr_t *)packet;
         sr_arp_hdr_t *arpHeader = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
         struct sr_if * iface;
         iface = sr_get_interface(sr, interface);
 
-        printf("Ethernet header is ");
-        print_addr_eth(ethHeader);
         
         arpHeader->ar_op = ntohs(2);
         for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
@@ -397,20 +396,21 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
     struct sr_arpentry *arp_entry;
     
     
+    uint8_t *ip_pkt;
     uint8_t *eth_pkt;
     struct sr_if *outgoing_interface;
     
     unsigned int eth_pkt_len;
     
     /* Look up shortest prefix match in your routing table. */
-    struct in_addr inad;
-    inad.s_addr = destination_ip;
+    struct in_addr dest_ip_ad;
+    dest_ip_ad.s_addr = destination_ip;
     
-    rt = sr_longest_prefix_match(sr, inad);
+    rt = sr_longest_prefix_match(sr, dest_ip_ad);
     
     /* If the entry doesn't exist, send ICMP host unreachable and return if necessary. */
     
-    if (rt == 0) {
+    if (!rt) {
         printf("Tried to send packet but no longest matching prefix was found. \n");
         /*
         if (send_icmp)
@@ -427,7 +427,7 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
     if (arp_entry || eth_type == ethertype_arp) {
         printf("Destination was found in the arpcache. \n");
         /* Create the ethernet packet.*/
-        eth_pkt_len = len;
+        eth_pkt_len = len + sizeof(sr_ethernet_hdr_t);
         eth_hdr.ether_type = htons(eth_type);
         
         /*   Destination is broadcast if it is an arp request. */
@@ -443,20 +443,25 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
         eth_pkt = malloc(eth_pkt_len);
         memcpy(eth_pkt, &eth_hdr, sizeof(eth_hdr));
         memcpy(eth_pkt + sizeof(eth_hdr), packet, len);
+        printf("About to call send packet with the following info:\n");
+        print_hdrs(eth_pkt, eth_pkt_len);
+        printf("Trying to send the above packet on the interface with ip: %s\n", outgoing_interface->name);
+
         sr_send_packet(sr, eth_pkt, len, outgoing_interface);
         free(eth_pkt);
         if (arp_entry)
             free(arp_entry);
     
-     /* Otherwise add it to the arp request queue. */
+        /* Otherwise add it to the arp request queue. */
     
     } else {
         /*printf("add it to the arp request queue\n");*/
         printf("Destination was not found in the arpcache\n");
 
-        eth_pkt = malloc(len);
-        memcpy(eth_pkt, packet, len);
-        arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, eth_pkt, len, outgoing_interface);
+        ip_pkt = malloc(len);
+        memcpy(ip_pkt, packet, len);
+        arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, ip_pkt, len, outgoing_interface);
+        free(ip_pkt);
         sr_arpreq_handle(sr, arp_req);
     }
     

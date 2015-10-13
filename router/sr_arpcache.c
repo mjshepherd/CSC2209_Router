@@ -36,7 +36,7 @@ void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
     /* Encapsulate and attempt to send it. */
     sr_encap_and_send_pkt(sr, 
                                       (uint8_t *)&arp_hdr, 
-                                            sizeof(struct sr_arp_hdr), 
+                                            sizeof(sr_arp_hdr_t), 
                                             req->ip,
                                             0,
                                             ethertype_arp);
@@ -66,12 +66,13 @@ void sr_arpreq_handle(struct sr_instance *sr, struct sr_arpreq *req) {
     if (difftime(time(0), req->sent) > 1.0) {
     
         /* Host is not reachable */
-        if (req->times_sent >= 5) {
+        if (req->times_sent > 5) {
             send_icmp_host_unreachable(sr, req);
             sr_arpreq_destroy(&sr->cache, req);
                 
             /* Resend ARP request. */
         } else {
+            printf("Sending ARP request for the %d time\n", req->times_sent);
             send_arp_request(sr, req);
             req->sent = time(0);
             req->times_sent++;
