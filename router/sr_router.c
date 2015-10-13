@@ -447,7 +447,7 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
         print_hdrs(eth_pkt, eth_pkt_len);
         printf("Trying to send the above packet on the interface with ip: %s\n", outgoing_interface->name);
 
-        sr_send_packet(sr, eth_pkt, len, outgoing_interface);
+        sr_send_packet(sr, eth_pkt, eth_pkt_len, outgoing_interface);
         free(eth_pkt);
         if (arp_entry)
             free(arp_entry);
