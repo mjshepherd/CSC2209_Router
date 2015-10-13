@@ -66,16 +66,16 @@ void sr_arpreq_handle(struct sr_instance *sr, struct sr_arpreq *req) {
     if (difftime(time(0), req->sent) > 1.0) {
     
         /* Host is not reachable */
-    if (req->times_sent >= 5) {
+        if (req->times_sent >= 5) {
             send_icmp_host_unreachable(sr, req);
             sr_arpreq_destroy(&sr->cache, req);
-            
-        /* Resend ARP request. */
+                
+            /* Resend ARP request. */
         } else {
-        send_arp_request(sr, req);
-      req->sent = time(0);
-      req->times_sent++;
-    }
+            send_arp_request(sr, req);
+            req->sent = time(0);
+            req->times_sent++;
+        }
     }
 }
 
