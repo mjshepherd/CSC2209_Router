@@ -228,6 +228,8 @@ void sr_handlepacket(struct sr_instance* sr,
     }  /* end for IP packet*/ 
     else if (ethtype == ethertype_arp) 
     {
+		
+		
 
         printf("==============================================\n");
         printf("==============================================\n");
@@ -236,25 +238,73 @@ void sr_handlepacket(struct sr_instance* sr,
         print_hdrs(packet, len);
         
         int pos = 0;
+		struct sr_arpreq *arp_req;
+
         sr_ethernet_hdr_t *ethHeader = (sr_ethernet_hdr_t *)packet;
         sr_arp_hdr_t *arpHeader = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+		
+
         struct sr_if * iface;
         iface = sr_get_interface(sr, interface);
+		struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, arpHeader->ar_sip);
+
+		if(arp_entry != 0)
+		{
+			printf("We already have this sender MAC address and IP in the cache database\n "); 
+		}
+		else
+		{
+			printf("We need to add the sender MAC address and IP address. \n");
+			arp_req = sr_arpcache_insert(&sr->cache, arpHeader->ar_sha, arpHeader->ar_sip);
+			/* There are packets waiting on this arp request. Send them. */
+			if (arp_req != 0) 
+			{
+				printf("There is packet waiting on this arp request. \n");
+			}
+			else
+			{
+				printf("No packet waiting on this arp request. \n");
+			}
+		}
+
+		/* Handle a request. */
+		if (ntohs(arpHeader->ar_op) == arp_op_request) 
+		{
+			printf("Ready to send reply back. \n");
+			/*process_arp_request(sr, arpHeader, rec_interface, ethHeader, packet,len);*/
+
+			int pos = 0;
+			arpHeader->ar_op = ntohs(2);
+			for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+			  arpHeader->ar_tha[pos] = arpHeader->ar_sha[pos];
+			}
+			arpHeader->ar_tip = arpHeader->ar_sip;
+			for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+			  arpHeader->ar_sha[pos] = iface->addr[pos];
+			}
+			arpHeader->ar_sip = iface->ip;
+
+			 
+			for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+				ethHeader->ether_dhost[pos] = ethHeader->ether_shost[pos];
+			}
+
+			for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
+				ethHeader->ether_shost[pos] = iface->addr[pos];
+			}
+
+			sr_send_packet(sr, packet, len, interface);
+		}
+		else if (ntohs(arpHeader->ar_op) == arp_op_reply) 
+		{
+			/*//////////////////////////////////////////////////////////////////////////*/
+			/*//////////////////////////////////////////////////////////////////////////*/
+			printf("Receive a ARP reply, need to send IP packet. \n");
+			/*//////////////////////////////////////////////////////////////////////////*/
+			/*//////////////////////////////////////////////////////////////////////////*/
+		}
 
         
-        arpHeader->ar_op = ntohs(2);
-        for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
-          arpHeader->ar_tha[pos] = arpHeader->ar_sha[pos];
-        }
-        arpHeader->ar_tip = arpHeader->ar_sip;
-        for (pos = 0; pos < ETHER_ADDR_LEN; pos++) {
-          arpHeader->ar_sha[pos] = iface->addr[pos];
-        }
-        arpHeader->ar_sip = iface->ip;
-
-        set_ethernet_header(ethHeader, ethHeader->ether_shost, iface->addr);
-
-        sr_send_packet(sr, packet, len, interface);
     
     }
 
