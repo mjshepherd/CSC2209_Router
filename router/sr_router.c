@@ -25,7 +25,6 @@
 
 void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_address, uint8_t * source_address);
 struct sr_if * retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP);
-int destinationIPHasRoute();
 uint32_t ck_lpm(uint32_t rt_dest, uint32_t mask, uint32_t dest);
 
 
@@ -187,10 +186,10 @@ void sr_handlepacket(struct sr_instance* sr,
                 return;
             }
         }    /* end for Ip packet destination is for router interface */
-        else if(destinationIPHasRoute())
+        else 
         {  
-            printf("222222222222222222\n");
-            uint8_t *fwd_ip_pkt;
+            printf("We need test if there is route to this IP address.\n");
+            uint8_t *forward_ip_packet;
             unsigned int len;
 
             /* Update the ip header ttl. */
@@ -210,16 +209,18 @@ void sr_handlepacket(struct sr_instance* sr,
 
             /* Make a copy, encapsulate and send it on. */
             
-            fwd_ip_pkt = malloc(len);
-            memcpy(fwd_ip_pkt, ipHeader, len);
-            sr_encap_and_send_pkt(sr, fwd_ip_pkt, len, ipHeader->ip_dst, 1, ethertype_ip);
-            free(fwd_ip_pkt);
+            forward_ip_packet = malloc(len);
+            memcpy(forward_ip_packet, ipHeader, len);
+            sr_encap_and_send_pkt(sr, forward_ip_packet, len, ipHeader->ip_dst, 1, ethertype_ip);
+            free(forward_ip_packet);
             
         }
+		/*
         else  
-        {  /*  Here IP can not be routed, Destination net unreachable (type 3, code 0) */
+        {  /*  Here IP can not be routed, Destination net unreachable (type 3, code 0) 
             printf("Could not resolve IP destination\n");
         }
+		*/
         /* icmpHeader->icmp_sum = 0; */
         /*
         sr_ip_hdr_t* IpHeader =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
@@ -350,10 +351,7 @@ struct sr_if* retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP)
 }
 
 
-int destinationIPHasRoute()
-{
-    return 0;
-}
+
 
 uint32_t ck_lpm(uint32_t rt_dest, uint32_t mask, uint32_t dest) {
   int j = 31;
@@ -468,6 +466,10 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
         */
         return;
     }
+	else
+	{
+		printf("We found the IP route in the route table. \n");
+	}
 
     /* Fetch the appropriate outgoing interface.  */
     outgoing_interface = sr_get_interface(sr, rt->interface);
