@@ -27,6 +27,8 @@ void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_ad
 struct sr_if * retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP);
 uint32_t ck_lpm(uint32_t rt_dest, uint32_t mask, uint32_t dest);
 
+int times = 0;
+
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -301,6 +303,19 @@ void sr_handlepacket(struct sr_instance* sr,
 			/*//////////////////////////////////////////////////////////////////////////*/
 			/*//////////////////////////////////////////////////////////////////////////*/
 			printf("Receive a ARP reply, need to send IP packet. \n");
+			struct sr_packet *cur;
+			struct sr_ip_hdr *ip_hdr;
+			
+			cur = arp_req->packets;
+			print_hdr_ip((uint8_t *)cur->buf);
+			
+			while (cur != 0) 
+			{
+				ip_hdr = (struct sr_ip_hdr *)cur->buf;
+				sr_encap_and_send_pkt(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 1,  ethertype_ip);
+				cur = cur->next;
+			}
+			
 			/*//////////////////////////////////////////////////////////////////////////*/
 			/*//////////////////////////////////////////////////////////////////////////*/
 		}
@@ -435,8 +450,9 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
                             int send_icmp,
                             enum sr_ethertype eth_type)
 {
-    printf("============Ready to send packet===================\n");
-
+    
+	times = times + 1;
+	printf("============Ready to send packet times %d ===================\n", times);
     struct sr_rt *rt;
     struct sr_arpreq *arp_req;
     struct sr_ethernet_hdr eth_hdr;
@@ -512,6 +528,8 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
 
         ip_pkt = malloc(len);
         memcpy(ip_pkt, packet, len);
+		printf("Here we want to add this ipPacket to the arp queue.\n");
+		print_hdr_ip(ip_pkt);
         arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, ip_pkt, len, outgoing_interface);
         free(ip_pkt);
         sr_arpreq_handle(sr, arp_req);
