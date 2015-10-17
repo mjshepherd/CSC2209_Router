@@ -22,6 +22,15 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+#define ICMP_TYPE_REPLY 0
+#define ICMP_TYPE_DEST_UNREACHABLE 3
+#define ICMP_TYPE_REQUEST 8
+#define ICMP_TYPE_TIME_EXCEED 11
+
+#define ICMP_CODE_ZERO 0
+#define ICMP_CODE_ONE 1
+#define ICMP_CODE_THREE 3
+
 
 void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_address, uint8_t * source_address);
 struct sr_if * retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP);
@@ -169,17 +178,32 @@ void sr_handlepacket(struct sr_instance* sr,
                 }
     
                 /* If the ICMP type is an echo request reply to it. Otherwise do nothing. */
-                if (icmpHeader->icmp_type == 8) 
+                if (icmpHeader->icmp_type == ICMP_TYPE_REQUEST) 
                 {
                     /* Send icmp echo reply. */
-                    
-                    sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), 0, 0, destination_if, ipHeader->ip_src);
+				
+					printf("==========================OKOKOKOK==========================\n");
+					printf("==================================================================\n");
+					printf("=================== Here ready to send reply to port==============\n");
+					sr_ip_hdr_t temp_add;
+					temp_add.ip_src = ipHeader->ip_dst;
+					ipHeader->ip_dst = ipHeader->ip_src;
+					ipHeader->ip_src = temp_add.ip_src;
+
+					icmpHeader->icmp_sum = 0;
+					icmpHeader->icmp_code = ICMP_CODE_ZERO;
+					icmpHeader->icmp_type = ICMP_TYPE_REPLY;
+					icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
+
+					print_hdr_ip((uint8_t *)ipHeader);
+					
+                    sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_REPLY, ICMP_CODE_ZERO);
                     return;
                 }
             }/* End for Ip packet is an ICMP packet.*/
             else if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp)
             {   /*Port unreachable (type 3, code 3) */
-                sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), 3, 3);
+                sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE);
             }
             else
             {
@@ -316,8 +340,6 @@ void sr_handlepacket(struct sr_instance* sr,
 				cur = cur->next;
 			}
 			
-			/*//////////////////////////////////////////////////////////////////////////*/
-			/*//////////////////////////////////////////////////////////////////////////*/
 		}
 
         
@@ -347,8 +369,6 @@ struct sr_if* retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP)
     struct sr_if* ip_interface;
     ip_interface = sr->if_list;
 
-    printf("Starting looking for interface========\n");
-    printf("Trying to match : %x\n", destIP);
     while(ip_interface)
     {
         printf("Against.. : %x\n", ip_interface->ip);
@@ -511,9 +531,9 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
         eth_pkt = malloc(eth_pkt_len);
         memcpy(eth_pkt, &eth_hdr, sizeof(eth_hdr));
         memcpy(eth_pkt + sizeof(eth_hdr), packet, len);
-        printf("About to call send packet with the following info:\n");
+        printf("Following is the ethernet info:\n");
         print_hdrs(eth_pkt, eth_pkt_len);
-        printf("Trying to send the above packet on the interface with ip: %s\n", outgoing_interface->name);
+        printf("Trying to send the above ethernet packet on the interface with ip: %s\n", outgoing_interface->name);
 
         sr_send_packet(sr, eth_pkt, eth_pkt_len, outgoing_interface);
         free(eth_pkt);
@@ -550,11 +570,13 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
  * supplied packet, which is an ip datagram. 
  *
  *---------------------------------------------------------------------*/
-void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int len, uint8_t type, uint8_t code, struct sr_if *interface, uint32_t destination_ip)
+void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int len, uint8_t type, uint8_t code)
 {
     printf("Now we know ICMP header, IP header, MAC ready to send back\n");
     printf("**************************************************\n");
 
+
+	
     
     uint16_t total_len;
 
@@ -563,9 +585,11 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
     sr_icmp_hdr_t* IcmpHeaderCopy;
     uint8_t *new_pkt;
 
-    ipHeader = (sr_ip_hdr_t *) &packet[sizeof(sr_ethernet_hdr_t)];
+    /*ipHeader = (sr_ip_hdr_t *) &packet[sizeof(sr_ethernet_hdr_t)];*/
+	ipHeader = (sr_ip_hdr_t *)packet;
     icmpHeader =(sr_icmp_hdr_t*) (ipHeader + ipHeader->ip_hl * 4);
-    
+
+
     /* Destination unreachable message or TTL exceeded. */
     
     if (type == 3 || type == 11)
@@ -634,11 +658,14 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
          * Setting TTL to 64
          * Currently not modifying total length or header length
          */
+		/*
         ipHeader->ip_src = interface->ip;
         ipHeader->ip_ttl = 64;
         ipHeader->ip_p = ip_protocol_icmp;
         ipHeader->ip_dst = destination_ip;
+		*/
         ipHeader->ip_sum = 0;
+		
         ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
 
 
@@ -653,8 +680,9 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
         
     }
     
-    
+	
+    printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^ in the function sr_send_icmp send packet\n");
     /* Encapsulate and send */
-    sr_encap_and_send_pkt(sr, new_pkt, len, destination_ip, 0, ethertype_ip);
+    sr_encap_and_send_pkt(sr, new_pkt, len, ipHeader->ip_dst, 0, ethertype_ip);
     
 }
