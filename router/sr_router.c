@@ -233,30 +233,26 @@ void sr_handlepacket(struct sr_instance* sr,
             ipHeader->ip_sum = 0;
             ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
 
+			sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(packet + ethAddressHeaderLength + sizeof(sr_ip_hdr_t));
+            printf("ICMP header is: \n");
+            print_hdr_icmp((uint8_t *)icmpHeader);    
+			/*print_hdr_ip((uint8_t *)ipHeader);*/
+			
+
             /* Make a copy, encapsulate and send it on. */
             
             forward_ip_packet = malloc(len);
             memcpy(forward_ip_packet, ipHeader, len);
-            sr_encap_and_send_pkt(sr, forward_ip_packet, len, ipHeader->ip_dst, 1, ethertype_ip);
+			print_hdr_ip(forward_ip_packet);
+			
+            sr_encap_and_send_pkt(sr, forward_ip_packet, len, ipHeader->ip_dst, 0, ethertype_ip);
             free(forward_ip_packet);
-            
+			
         }
-		/*
-        else  
-        {  /*  Here IP can not be routed, Destination net unreachable (type 3, code 0) 
-            printf("Could not resolve IP destination\n");
-        }
-		*/
-        /* icmpHeader->icmp_sum = 0; */
-        /*
-        sr_ip_hdr_t* IpHeader =  (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-        */
-
+		
     }  /* end for IP packet*/ 
     else if (ethtype == ethertype_arp) 
     {
-		
-		
 
         printf("==============================================\n");
         printf("==============================================\n");
@@ -336,7 +332,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			while (cur != 0) 
 			{
 				ip_hdr = (struct sr_ip_hdr *)cur->buf;
-				sr_encap_and_send_pkt(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 1,  ethertype_ip);
+				sr_encap_and_send_pkt(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
 				cur = cur->next;
 			}
 			
@@ -446,28 +442,11 @@ struct sr_rt *sr_longest_prefix_match(struct sr_instance* sr, struct in_addr add
 }
 
 
-/*---------------------------------------------------------------------
- * Method: sr_encap_and_send_pkt(struct sr_instance* sr, 
- *                                                  uint8_t *packet, 
- *                                                  unsigned int len, 
- *                                              uint32_t dip,
- *                                                  int send_icmp,
- *                                                  sr_ethertype type)
- * Scope:  Global
- *
- * Sends a packet of length len and destination ip address dip, by 
- * looking up the shortest prefix match of the dip (net byte order).
- * If it finds a match, it then checks the arp cache to find the 
- * associated hardware address. If the hardware address is found it 
- * sends it, otherwise it queues the packet and sends an ARP request.
- * If the destination is sill not found, it sends an ICMP host unreachable.
- *
- *---------------------------------------------------------------------*/
 void sr_encap_and_send_pkt(struct sr_instance* sr,
                             uint8_t *packet,
                             unsigned int len,
                             uint32_t destination_ip,
-                            int send_icmp,
+                            int icmp_error_type,
                             enum sr_ethertype eth_type)
 {
     
@@ -495,11 +474,11 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
     /* If the entry doesn't exist, send ICMP host unreachable and return if necessary. */
     
     if (!rt) {
-        printf("Tried to send packet but no longest matching prefix was found. \n");
-        /*
-        if (send_icmp)
-            sr_send_icmp(sr, packet, len, ICMP_UNREACHABLE_TYPE, ICMP_NET_CODE);
-        */
+        printf("============== No Route for this IP================\n");
+		printf("============== We need send ICMP type 3, code 0 ================\n");
+		print_hdr_ip(packet);
+		
+		sr_send_icmp(sr, packet, len, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_ZERO);
         return;
     }
 	else
@@ -514,6 +493,10 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
     arp_entry = sr_arpcache_lookup(&sr->cache, rt->gw.s_addr);
     if (arp_entry || eth_type == ethertype_arp) {
         printf("Destination was found in the arpcache. \n");
+		printf("============================================== \n");
+		printf("============================================== \n");
+
+
         /* Create the ethernet packet.*/
         eth_pkt_len = len + sizeof(sr_ethernet_hdr_t);
         eth_hdr.ether_type = htons(eth_type);
@@ -531,8 +514,49 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
         eth_pkt = malloc(eth_pkt_len);
         memcpy(eth_pkt, &eth_hdr, sizeof(eth_hdr));
         memcpy(eth_pkt + sizeof(eth_hdr), packet, len);
-        printf("Following is the ethernet info:\n");
+        
+		
+		if( icmp_error_type > 0 )
+		{
+			printf("============= In the new packet, icmp header ===================\n");
+			sr_ip_hdr_t * ipHeaderTemp = (sr_ip_hdr_t *) (eth_pkt + sizeof(sr_ethernet_hdr_t));
+			sr_icmp_hdr_t * icmpHeader = (sr_icmp_hdr_t *)(eth_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+			if( icmp_error_type == 1 )
+			{
+				printf("============= We will update icmp header for type 3 and code 0 ===================\n");
+				/*icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;*/
+				icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
+				icmpHeader->icmp_code = ICMP_CODE_ZERO;
+			}
+			else if ( icmp_error_type == 2 )
+			{
+				printf("============= We will update icmp header for type 3 and code 1 ===================\n");
+				icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
+				icmpHeader->icmp_code = ICMP_CODE_ONE;
+			}
+			else if ( icmp_error_type == 3 )
+			{
+				printf("============= We will update icmp header for type 3 and code 3 ===================\n");
+				icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
+				icmpHeader->icmp_code = ICMP_CODE_THREE;
+			}
+			else if ( icmp_error_type == 4 )
+			{
+				printf("============= We will update icmp header for TTL exceed ===================\n");
+				icmpHeader->icmp_type = ICMP_TYPE_TIME_EXCEED;
+				icmpHeader->icmp_code = ICMP_CODE_ZERO;
+			}
+			
+			icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeaderTemp->ip_len) - ipHeaderTemp->ip_hl*4);
+			print_hdr_icmp((uint8_t*)icmpHeader);
+			printf("============= In the new packet, End ===================\n");
+		}
+		
+
+		printf("Following is the ethernet info:\n");
         print_hdrs(eth_pkt, eth_pkt_len);
+
         printf("Trying to send the above ethernet packet on the interface with ip: %s\n", outgoing_interface->name);
 
         sr_send_packet(sr, eth_pkt, eth_pkt_len, outgoing_interface);
@@ -576,27 +600,51 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
     printf("**************************************************\n");
 
 
+	sr_ip_hdr_t* ipHeader;
+    sr_icmp_hdr_t* icmpHeader;
+
+	ipHeader = (sr_ip_hdr_t *)packet;
+    icmpHeader =(sr_icmp_hdr_t*) (ipHeader + ipHeader->ip_hl * 4);
 	
     
     uint16_t total_len;
 
-    sr_ip_hdr_t* ipHeader;
-    sr_icmp_hdr_t* icmpHeader;
+   
     sr_icmp_hdr_t* IcmpHeaderCopy;
     uint8_t *new_pkt;
 
     /*ipHeader = (sr_ip_hdr_t *) &packet[sizeof(sr_ethernet_hdr_t)];*/
-	ipHeader = (sr_ip_hdr_t *)packet;
-    icmpHeader =(sr_icmp_hdr_t*) (ipHeader + ipHeader->ip_hl * 4);
+	
 
 
     /* Destination unreachable message or TTL exceeded. */
     
-    if (type == 3 || type == 11)
+    if ((type == ICMP_TYPE_DEST_UNREACHABLE ) && ( code == ICMP_CODE_ZERO))
     {
-        
-        /* Update the IP header fields. */
+		printf("============== Now we enter type 3 icmp function\n");
+
+        print_hdr_ip((uint8_t*)ipHeader);
+		
+        /* Update the IP header and ICMP header fields. */
+
+		icmpHeader->icmp_sum = 0;
+		icmpHeader->icmp_code = ICMP_CODE_ZERO;
+		icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
+		icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
+		print_hdr_icmp((uint8_t*)icmpHeader);
+
+
+		sr_ip_hdr_t temp_add;
+		temp_add.ip_src = ipHeader->ip_dst;
+		ipHeader->ip_dst = ipHeader->ip_src;
+		ipHeader->ip_src = temp_add.ip_src;
+		print_hdr_ip((uint8_t*)ipHeader);
+
     /*
+	
+
+				
+
         error_ip_hdr = (struct sr_ip_hdr *)packet;
         ip_hdr.ip_hl = ICMP_IP_HDR_LEN;
         ip_hdr.ip_v = ip_version_4;
@@ -642,6 +690,9 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
                      ip_ihl(error_ip_hdr) + ICMP_COPIED_DATAGRAM_DATA_LEN);
         
     /* Echo reply. */
+		
+		sr_encap_and_send_pkt(sr, packet, len, ipHeader->ip_dst, 1, ethertype_ip);
+		return;
     
     } 
     else if (type == 0) {
@@ -654,18 +705,8 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
         icmpHeader->icmp_type = type;
         icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
     
-        /* Update IP header fields 
-         * Setting TTL to 64
-         * Currently not modifying total length or header length
-         */
-		/*
-        ipHeader->ip_src = interface->ip;
-        ipHeader->ip_ttl = 64;
-        ipHeader->ip_p = ip_protocol_icmp;
-        ipHeader->ip_dst = destination_ip;
-		*/
-        ipHeader->ip_sum = 0;
-		
+       
+        ipHeader->ip_sum = 0;	
         ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
 
 
@@ -674,9 +715,6 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
         new_pkt = malloc(total_len);
         memcpy(new_pkt, packet, total_len);
         
-        /* What?
-        icmp_len = total_len - 5;
-        */
         
     }
     
