@@ -34,7 +34,6 @@
 
 void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_address, uint8_t * source_address);
 struct sr_if * retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP);
-uint32_t ck_lpm(uint32_t rt_dest, uint32_t mask, uint32_t dest);
 
 int times = 0;
 
@@ -245,7 +244,7 @@ void sr_handlepacket(struct sr_instance* sr,
             memcpy(forward_ip_packet, ipHeader, len);
 			print_hdr_ip(forward_ip_packet);
 			
-            sr_encap_and_send_pkt(sr, forward_ip_packet, len, ipHeader->ip_dst, 0, ethertype_ip);
+            sr_send_ehternet_packet(sr, forward_ip_packet, len, ipHeader->ip_dst, 0, ethertype_ip);
             free(forward_ip_packet);
 			
         }
@@ -332,7 +331,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			while (cur != 0) 
 			{
 				ip_hdr = (struct sr_ip_hdr *)cur->buf;
-				sr_encap_and_send_pkt(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
+				sr_send_ehternet_packet(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
 				cur = cur->next;
 			}
 			
@@ -382,54 +381,21 @@ struct sr_if* retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP)
 }
 
 
-
-
-uint32_t ck_lpm(uint32_t rt_dest, uint32_t mask, uint32_t dest) {
-  int j = 31;
-  while (j > -1 && ((mask >> j) & 1)) {
-    j--;
-  }
-  int mask_number = 31 - j;
-  int i = mask_number;
-  while (i) {
-      int rt_dest_bit = (ntohl(rt_dest) >> i) & 1;
-      int dest_bit = (dest >> i) & 1;
-
-      if (rt_dest_bit != dest_bit) {
-        return 0;
-      }
-      i--;
-  }
-  return mask_number;
-}
-
-
-/*---------------------------------------------------------------------
- * Method:sr_longest_prefix_match(struct sr_instance* sr, struct in_addr)
- *
- * Look up the longest prefix match in the routing table. Return the 
- * associated struct sr_rt.
- *---------------------------------------------------------------------*/
 struct sr_rt *sr_longest_prefix_match(struct sr_instance* sr, struct in_addr addr)
 {
-    struct sr_rt* rt;
-    struct sr_rt* lpm;
-    uint32_t lpm_len;
-    
-    printf("Trying to match the ip address: \n");
+     
+    printf("Trying to find suitable ip address: ");
     print_addr_ip(addr);
-    rt = sr->routing_table;
-    lpm_len = 0;
-    lpm = NULL;
-    
-    /* Iterate through the interfaces and compare the masked addresses. If they are equal
-     * then we found a match. We know it is longest if the netmask we used is greater
-     * than the one used for the previous match. */
-    while(rt != 0) {
-        printf("With the ip address:  \n");
-        print_addr_ip(rt->dest);
+
+	struct sr_rt* lpm = NULL;
+	uint32_t lpm_len = 0;
+	struct sr_rt* rt = sr->routing_table;
+  
+    while( rt != 0 ) 
+	{
         if (((rt->dest.s_addr & rt->mask.s_addr) == (addr.s_addr & rt->mask.s_addr)) &&
-              (lpm_len <= rt->mask.s_addr)) {
+              (lpm_len <= rt->mask.s_addr)) 
+		{
               
             lpm_len = rt->mask.s_addr;
             lpm = rt;
@@ -442,7 +408,7 @@ struct sr_rt *sr_longest_prefix_match(struct sr_instance* sr, struct in_addr add
 }
 
 
-void sr_encap_and_send_pkt(struct sr_instance* sr,
+void sr_send_ehternet_packet(struct sr_instance* sr,
                             uint8_t *packet,
                             unsigned int len,
                             uint32_t destination_ip,
@@ -527,7 +493,7 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
 				printf("============= We will update icmp header for type 3 and code 0 ===================\n");
 				/*icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;*/
 				icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
-				icmpHeader->icmp_code = ICMP_CODE_ZERO;
+				icmpHeader->icmp_code = ICMP_CODE_ONE;
 			}
 			else if ( icmp_error_type == 2 )
 			{
@@ -548,7 +514,7 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
 				icmpHeader->icmp_code = ICMP_CODE_ZERO;
 			}
 			
-			icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeaderTemp->ip_len) - ipHeaderTemp->ip_hl*4);
+			icmpHeader->icmp_sum = 0;/*cksum(icmpHeader, ntohs(ipHeaderTemp->ip_len) - ipHeaderTemp->ip_hl*4);*/
 			print_hdr_icmp((uint8_t*)icmpHeader);
 			printf("============= In the new packet, End ===================\n");
 		}
@@ -576,25 +542,17 @@ void sr_encap_and_send_pkt(struct sr_instance* sr,
 		print_hdr_ip(ip_pkt);
         arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, ip_pkt, len, outgoing_interface);
         free(ip_pkt);
-        sr_arpreq_handle(sr, arp_req);
+        sr_arpreq_handler(sr, arp_req);
     }
     
 }
 
 
 /*---------------------------------------------------------------------
- * Method: sr_send_icmp(struct sr_instance* sr, 
- *                      uint8_t *packet, 
- *                      unsigned int len,
- *                      uint8_t type,
- *                      uint8_t code)
- * Scope: Global
- *
- * This function sends an icmp of the supplied type and code, using the
- * supplied packet, which is an ip datagram. 
- *
+ * This function sends an icmp with the type and code
+ * parameter: packet is an IP packet, len is its length
  *---------------------------------------------------------------------*/
-void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int len, uint8_t type, uint8_t code)
+void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uint8_t type, uint8_t code)
 {
     printf("Now we know ICMP header, IP header, MAC ready to send back\n");
     printf("**************************************************\n");
@@ -613,85 +571,63 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
     sr_icmp_hdr_t* IcmpHeaderCopy;
     uint8_t *new_pkt;
 
-    /*ipHeader = (sr_ip_hdr_t *) &packet[sizeof(sr_ethernet_hdr_t)];*/
-	
-
 
     /* Destination unreachable message or TTL exceeded. */
     
-    if ((type == ICMP_TYPE_DEST_UNREACHABLE ) && ( code == ICMP_CODE_ZERO))
+    if (type == ICMP_TYPE_DEST_UNREACHABLE )
     {
 		printf("============== Now we enter type 3 icmp function\n");
 
-        print_hdr_ip((uint8_t*)ipHeader);
+		struct sr_icmp_hdr icmp_hdr;
+
+        /* Update icmp header fields. */
+		icmp_hdr.icmp_type = type;
+		icmp_hdr.icmp_code = code;
+		icmp_hdr.icmp_sum = 0;
 		
         /* Update the IP header and ICMP header fields. */
+		struct sr_ip_hdr *error_ip_hdr;
+		struct sr_ip_hdr ip_hdr;
+		struct sr_rt *rt;
+		struct sr_if *my_interface;
 
-		icmpHeader->icmp_sum = 0;
-		icmpHeader->icmp_code = ICMP_CODE_ZERO;
-		icmpHeader->icmp_type = ICMP_TYPE_DEST_UNREACHABLE;
-		icmpHeader->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
-		print_hdr_icmp((uint8_t*)icmpHeader);
+		
 
 
-		sr_ip_hdr_t temp_add;
-		temp_add.ip_src = ipHeader->ip_dst;
-		ipHeader->ip_dst = ipHeader->ip_src;
-		ipHeader->ip_src = temp_add.ip_src;
-		print_hdr_ip((uint8_t*)ipHeader);
-
-    /*
-	
-
-				
-
-        error_ip_hdr = (struct sr_ip_hdr *)packet;
-        ip_hdr.ip_hl = ICMP_IP_HDR_LEN;
-        ip_hdr.ip_v = ip_version_4;
+		error_ip_hdr = (struct sr_ip_hdr *)packet;
+        ip_hdr.ip_hl = 5;
+        ip_hdr.ip_v = 4;
         ip_hdr.ip_tos = 0;
         ip_hdr.ip_id = error_ip_hdr->ip_id;
-        ip_hdr.ip_off = htons(IP_DF);
-        ip_hdr.ip_ttl = DEFAULT_TTL;
+        ip_hdr.ip_off = htons(0x4000);
+        ip_hdr.ip_ttl = 64;
         ip_hdr.ip_p = ip_protocol_icmp;
         ip_hdr.ip_sum = 0;
         ip_hdr.ip_dst = error_ip_hdr->ip_src;
-        dst = error_ip_hdr->ip_src;
-    
-        /* Look up longest prefix match in your routing table. If it doesn't exist, just
-         * give up. No use in sending an error message for an error message. */
-    /*
-        rt = sr_longest_prefix_match(sr, ip_in_addr(ip_hdr.ip_dst));
-        if (rt == 0)
-            return;
-        
-        /* Update the source IP to be the outgoing interface's ip address. */
-    /*
-        interface = sr_get_interface(sr, (const char*)rt->interface);
-        ip_hdr.ip_src = interface->ip;
-        
-        /* Update length: first 8 bytes of original message, original ip header, icmp header
-         * and new ip header. */
-    /*
-        icmp_len = ip_ihl(error_ip_hdr) + ICMP_COPIED_DATAGRAM_DATA_LEN + sizeof(struct sr_icmp_hdr);
-        total_len = icmp_len + ICMP_IP_HDR_LEN_BYTES;
+		ip_hdr.ip_src = error_ip_hdr->ip_dst;         /*need to be update */
+	
+		print_hdr_ip((uint8_t*)&ip_hdr);
+
+		uint16_t icmp_len;
+		uint16_t total_len;
+
+		icmp_len = error_ip_hdr->ip_hl * 4 + 8 + sizeof(struct sr_icmp_hdr);
+		total_len = icmp_len + 20;
         ip_hdr.ip_len = htons(total_len);
-        
-        /* Update the ip checksum. */
-    /*
-        ip_hdr.ip_sum = cksum(&ip_hdr, ICMP_IP_HDR_LEN_BYTES);
-    
-        /* Allocate a packet, copy everything in. */
-    /*
-        new_pkt = malloc(total_len);
-        memcpy(new_pkt, &ip_hdr, ICMP_IP_HDR_LEN_BYTES);
-        memcpy(new_pkt + ICMP_IP_HDR_LEN_BYTES, &icmp_hdr, sizeof(struct sr_icmp_hdr));
-        memcpy(new_pkt + ICMP_IP_HDR_LEN_BYTES + sizeof(struct sr_icmp_hdr), 
-                     error_ip_hdr, 
-                     ip_ihl(error_ip_hdr) + ICMP_COPIED_DATAGRAM_DATA_LEN);
+		
+		ip_hdr.ip_sum = cksum(&ip_hdr, 20);
+
+		new_pkt = malloc(total_len);
+		memcpy(new_pkt, &ip_hdr, 20);
+		memcpy(new_pkt + 20, &icmp_hdr, sizeof(struct sr_icmp_hdr));
+		memcpy(new_pkt + 20 + sizeof(struct sr_icmp_hdr), error_ip_hdr, error_ip_hdr->ip_hl * 4 + 8);
+
+		print_hdr_ip((uint8_t*)&ip_hdr);
+   
         
     /* Echo reply. */
 		
-		sr_encap_and_send_pkt(sr, packet, len, ipHeader->ip_dst, 1, ethertype_ip);
+		/*sr_send_ehternet_packet(sr, packet, len, ipHeader->ip_dst, 1, ethertype_ip);*/
 		return;
     
     } 
@@ -717,10 +653,15 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet /*Lent*/, unsigned int
         
         
     }
+	else if( (type == ICMP_TYPE_DEST_UNREACHABLE ) && ( code == ICMP_CODE_ONE) )
+	{
+		printf("^^^^^^^^^^ 5 times send fail.\n");
+		return;
+	}
     
 	
     printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^ in the function sr_send_icmp send packet\n");
     /* Encapsulate and send */
-    sr_encap_and_send_pkt(sr, new_pkt, len, ipHeader->ip_dst, 0, ethertype_ip);
+    sr_send_ehternet_packet(sr, new_pkt, len, ipHeader->ip_dst, 0, ethertype_ip);
     
 }
