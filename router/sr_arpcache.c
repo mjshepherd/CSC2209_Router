@@ -12,66 +12,59 @@
 #include "sr_protocol.h"
 
 
-/* 
- * This function sends an arp request.
- */
+
 void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
 {
     struct sr_arp_hdr arp_hdr;
-    struct sr_if *interface;
     
-    /* Get the outgoing interface. */
-    interface = sr_get_interface(sr, req->packets->iface);
     
-    /* Create a ARP header with the appropriate request information */
+    struct sr_if *interface = sr_get_interface(sr, req->packets->iface);
+    
+
     arp_hdr.ar_hrd = htons(arp_hrd_ethernet);
     arp_hdr.ar_pro = htons(0x0800);
     arp_hdr.ar_hln = ETHER_ADDR_LEN;
     arp_hdr.ar_pln = sizeof(uint32_t);
     arp_hdr.ar_op = htons(arp_op_request);
+
     memcpy(arp_hdr.ar_sha, interface->addr, ETHER_ADDR_LEN);
-    arp_hdr.ar_sip = interface->ip;
+    
+	arp_hdr.ar_sip = interface->ip;
     arp_hdr.ar_tip = req->ip;
     
-    /* Encapsulate and attempt to send it. */
-    sr_encap_and_send_pkt(sr, 
-                                      (uint8_t *)&arp_hdr, 
-                                            sizeof(sr_arp_hdr_t), 
-                                            req->ip,
-                                            0,
-                                            ethertype_arp);
+    sr_send_ehternet_packet(sr, (uint8_t *)&arp_hdr,  sizeof(sr_arp_hdr_t),  req->ip,  0,  ethertype_arp);
 }
 
 
 
-/* 
- * This function sends icmp host unreachable to all packets waiting on the arp request.
- */
+
 void send_icmp_host_unreachable(struct sr_instance *sr, struct sr_arpreq *req) {
-    struct sr_packet *cur;
+
+	struct sr_packet *cur;
     
+	printf("*******************************************\n");
+	printf("************5 times ARP requests failed. will send type 3 and code 1 **************\n");
     cur = req->packets;
-    while (cur != 0) {
+    while (cur != 0) 
+	{
         sr_send_icmp(sr, cur->buf, cur->len, 3, 1);
         cur = cur->next;
     }
 }
 
-/* 
- * This function sends an outstanding arp request again if at least one seconds has 
- * passed since their last send, and they have already been sent less than 5 times. 
- * Otherwise, it icmp host unreachable to all packets waiting on this request.
- */
-void sr_arpreq_handle(struct sr_instance *sr, struct sr_arpreq *req) {
-    if (difftime(time(0), req->sent) > 1.0) {
+
+void sr_arpreq_handler(struct sr_instance *sr, struct sr_arpreq *req) {
     
-        /* Host is not reachable */
-        if (req->times_sent > 5) {
+	if (difftime(time(0), req->sent) > 1.0) {
+    
+        /* if five ARP requests were sent to the next-hop IP without a response, send message: Destination host unreachable (type 3, code 1) */
+        if (req->times_sent > 5) 
+		{
             send_icmp_host_unreachable(sr, req);
-            sr_arpreq_destroy(&sr->cache, req);
-                
-            /* Resend ARP request. */
-        } else {
+            sr_arpreq_destroy(&sr->cache, req);        
+        } 
+		else        
+		{
             printf("Sending ARP request for the %d time\n", req->times_sent);
             send_arp_request(sr, req);
             req->sent = time(0);
@@ -91,12 +84,16 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     struct sr_arpreq *cur;
     struct sr_arpreq *next;
     
-    /* Iterate through all outstanding arp requests */
+    /* Iterate through all arp requests */
     cur = sr->cache.requests;
     if (cur)
-        next = cur->next;
-    while(cur != 0) {
-        sr_arpreq_handle(sr, cur);
+    {
+		next = cur->next;
+	}
+
+    while(cur != 0) 
+	{
+        sr_arpreq_handler(sr, cur);
         cur = next;
         if (cur)
             next = cur->next;
