@@ -222,7 +222,7 @@ void sr_handlepacket(struct sr_instance* sr,
             len = ntohs(ipHeader->ip_len);;
             if (ipHeader->ip_ttl == 0) 
             {
-                sr_send_icmp(sr, (uint8_t *)ipHeader, len, 11, 0);
+                sr_send_icmp(sr, (uint8_t *)ipHeader, len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
                 return;
             }
     
