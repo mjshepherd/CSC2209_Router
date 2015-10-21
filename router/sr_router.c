@@ -613,7 +613,6 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
     
 	sr_send_ehternet_packet(sr, new_pkt, total_len, ip_hdr.ip_dst, 1, ethertype_ip);
 	return;
-	printf("this is a change");
     
     } 
     else if (type == 0) {
