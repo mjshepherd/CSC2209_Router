@@ -238,11 +238,11 @@ void sr_handlepacket(struct sr_instance* sr,
             forward_ip_packet = malloc(len);
             memcpy(forward_ip_packet, ipHeader, len);
 
-			printf("======= Before eneter the function sr_send_ehternet_packet ip header info ============\n");
+			printf("======= Before eneter the function sr_send_ethernet_packet ip header info ============\n");
 			print_hdr_ip(forward_ip_packet);
 
 			
-            sr_send_ehternet_packet(sr, forward_ip_packet, len, ipHeader->ip_dst, 0, ethertype_ip);
+            sr_send_ethernet_packet(sr, forward_ip_packet, len, ipHeader->ip_dst, 0, ethertype_ip);
             free(forward_ip_packet);
 			
         }
@@ -329,7 +329,7 @@ void sr_handlepacket(struct sr_instance* sr,
 			while (cur != 0) 
 			{
 				ip_hdr = (struct sr_ip_hdr *)cur->buf;
-				sr_send_ehternet_packet(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
+				sr_send_ethernet_packet(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
 				cur = cur->next;
 			}
 			
@@ -406,7 +406,7 @@ struct sr_rt *sr_longest_prefix_match(struct sr_instance* sr, struct in_addr add
 }
 
 
-void sr_send_ehternet_packet(struct sr_instance* sr,
+void sr_send_ethernet_packet(struct sr_instance* sr,
                             uint8_t *packet,
                             unsigned int len,
                             uint32_t destination_ip,
@@ -611,7 +611,7 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 	print_hdr_ip((uint8_t*)new_pkt);
 	*/
     
-	sr_send_ehternet_packet(sr, new_pkt, total_len, ip_hdr.ip_dst, 1, ethertype_ip);
+	sr_send_ethernet_packet(sr, new_pkt, total_len, ip_hdr.ip_dst, 1, ethertype_ip);
 	return;
     
     } 
@@ -641,6 +641,6 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 	
     printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^ in the function sr_send_icmp send packet\n");
     /* Encapsulate and send */
-    sr_send_ehternet_packet(sr, new_pkt, len, ipHeader->ip_dst, 0, ethertype_ip);
+    sr_send_ethernet_packet(sr, new_pkt, len, ipHeader->ip_dst, 0, ethertype_ip);
     
 }
