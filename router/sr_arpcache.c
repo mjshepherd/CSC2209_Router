@@ -32,7 +32,7 @@ void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
 	arp_hdr.ar_sip = interface->ip;
     arp_hdr.ar_tip = req->ip;
     
-    sr_send_ehternet_packet(sr, (uint8_t *)&arp_hdr,  sizeof(sr_arp_hdr_t),  req->ip,  0,  ethertype_arp);
+    sr_send_ethernet_packet(sr, (uint8_t *)&arp_hdr,  sizeof(sr_arp_hdr_t),  req->ip,  0,  ethertype_arp);
 }
 
 
