@@ -60,6 +60,8 @@ void sr_arpreq_handler(struct sr_instance *sr, struct sr_arpreq *req) {
         /* if five ARP requests were sent to the next-hop IP without a response, send message: Destination host unreachable (type 3, code 1) */
         if (req->times_sent > 5) 
 		{
+			printf("=================================================5 TIMES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+			req->times_sent = 0;
             send_icmp_host_unreachable(sr, req);
             sr_arpreq_destroy(&sr->cache, req);        
         } 

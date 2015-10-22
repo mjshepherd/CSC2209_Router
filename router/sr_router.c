@@ -36,7 +36,7 @@ void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_ad
 struct sr_if * retrieveRouterInterface(struct  sr_instance* sr, uint32_t destIP);
 
 int times = 0;
-
+char* incoming_interface_name;
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -201,6 +201,11 @@ void sr_handlepacket(struct sr_instance* sr,
             }/* End for Ip packet is an ICMP packet.*/
             else if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp)
             {   /*Port unreachable (type 3, code 3) */
+				int len_temp = sizeof(interface);
+				incoming_interface_name = malloc(len_temp+1);
+				memset(incoming_interface_name, len_temp,0);
+				memcpy(incoming_interface_name, interface, len_temp);
+				
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE);
             }
             else
@@ -222,6 +227,10 @@ void sr_handlepacket(struct sr_instance* sr,
             len = ntohs(ipHeader->ip_len);;
             if (ipHeader->ip_ttl == 0) 
             {
+				int len_temp = sizeof(interface);
+				incoming_interface_name = malloc(len_temp+1);
+				memset(incoming_interface_name, len_temp,0);
+				memcpy(incoming_interface_name, interface, len_temp);
                 sr_send_icmp(sr, (uint8_t *)ipHeader, len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
                 return;
             }
@@ -414,8 +423,7 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
                             enum sr_ethertype eth_type)
 {
     
-	times = times + 1;
-	printf("============Ready to send packet times %d ===================\n", times);
+	
     struct sr_rt *rt;
     struct sr_arpreq *arp_req;
     struct sr_ethernet_hdr eth_hdr;
@@ -557,7 +565,10 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
     
     if ((type == ICMP_TYPE_DEST_UNREACHABLE ) || (type == ICMP_TYPE_TIME_EXCEED))
     {
-	printf("============== Now we enter type 3 icmp function\n");
+	printf("============== Now we enter type 3 icmp function\n on interface:");
+	struct sr_if * incoming_interface = sr_get_interface(sr, incoming_interface_name);
+	printf(incoming_interface_name);
+	printf("\n");
 	/*
 	printf("============== Following is current ipheader info\n");
 	print_hdr_ip((uint8_t*)ipHeader);
@@ -571,7 +582,7 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 	icmp3Header.unused    = 0;
 	icmp3Header.next_mtu  = 0;
 	memcpy(icmp3Header.data,ipHeader,28);
-
+	icmp3Header.icmp_sum = cksum(&icmp3Header,sizeof(icmp3Header));
 	printf("===========Following is old ip packet\n");
 	print_hdr_ip((uint8_t*)ipHeader);
  
@@ -580,31 +591,36 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 	struct sr_ip_hdr ip_hdr;
 	
 	ip_hdr.ip_hl = 5;
-        ip_hdr.ip_v = 4;
-        ip_hdr.ip_tos = 0;
-        ip_hdr.ip_id = ipHeader->ip_id;
-        ip_hdr.ip_off = htons(0x4000);
-        ip_hdr.ip_ttl = 64;
-        ip_hdr.ip_p = ip_protocol_icmp;
-        ip_hdr.ip_sum = 0;
-        ip_hdr.ip_dst = ipHeader->ip_src;
-	ip_hdr.ip_src = ipHeader->ip_dst;  
-	ip_hdr.ip_len = htons( 20 + sizeof(icmp3Header));
+    ip_hdr.ip_v = 4;
+    ip_hdr.ip_tos = 0;
+    ip_hdr.ip_id = ipHeader->ip_id;
+    ip_hdr.ip_off = htons(0x4000);
+    ip_hdr.ip_ttl = 64;
+    ip_hdr.ip_p = ip_protocol_icmp;
+    ip_hdr.ip_sum = 0;
+    ip_hdr.ip_dst = ipHeader->ip_src;
+	printf("===========the incoming interface ip is \n"  );
+	ip_hdr.ip_src = incoming_interface->ip;  
+	printf("===========EXISTANT \n"  );
+	ip_hdr.ip_len = htons( sizeof(ip_hdr) + sizeof(icmp3Header));
 
-	ip_hdr.ip_sum = cksum(&ip_hdr, 20);
+	ip_hdr.ip_sum = cksum(&ip_hdr, sizeof(ip_hdr));
 
 	printf("============== new ip header info\n");
 	print_hdr_ip((uint8_t*)&ip_hdr);
 	
+	printf("============== new icmp header info\n");
+	print_hdr_icmp((uint8_t*)&icmp3Header);
+	
        
 		
-	total_len = 20 + sizeof(icmp3Header);
+	total_len = sizeof(ip_hdr) + sizeof(icmp3Header);
 	printf("========total length of new ip packet is %d\n", total_len);
 		
 	new_pkt = malloc(total_len);
-	memcpy(new_pkt, &ip_hdr, 20);           /*copy the first 20 bytes ip header info to the new packet*/
+	memcpy(new_pkt, &ip_hdr, sizeof(ip_hdr));           /*copy the first 20 bytes ip header info to the new packet*/
 
-	memcpy(new_pkt + 20, &icmp3Header, sizeof(icmp3Header));
+	memcpy(new_pkt + sizeof(ip_hdr), &icmp3Header, sizeof(icmp3Header));
 
 	/*
 	printf("========Before we send out the packet, check ip header again\n");
