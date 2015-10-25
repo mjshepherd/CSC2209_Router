@@ -35,8 +35,6 @@
 void set_ethernet_header(sr_ethernet_hdr_t * ethHeader, uint8_t * destination_address, uint8_t * source_address);
 struct sr_if * sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip);
 
-char* incoming_interface_name;
-
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -186,10 +184,6 @@ void sr_handlepacket(struct sr_instance* sr,
             else if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp)
             {   /*Port unreachable (type 3, code 3) */
                 printf("INFO: Packet contains a UDP/TCP header.\n");
-                int len_temp = sizeof(interface);
-                incoming_interface_name = malloc(len_temp+1);
-                memset(incoming_interface_name, len_temp, 0);
-                memcpy(incoming_interface_name, interface, len_temp);
                 
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE);
             }
@@ -213,10 +207,6 @@ void sr_handlepacket(struct sr_instance* sr,
             len = ntohs(ipHeader->ip_len);;
             if (ipHeader->ip_ttl == 0) 
             {
-                int len_temp = sizeof(interface);
-                incoming_interface_name = malloc(len_temp+1);
-                memset(incoming_interface_name, len_temp,0);
-                memcpy(incoming_interface_name, interface, len_temp);
                 sr_send_icmp(sr, (uint8_t *)ipHeader, len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
                 return;
             }
@@ -551,9 +541,7 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
     if ((type == ICMP_TYPE_DEST_UNREACHABLE ) || (type == ICMP_TYPE_TIME_EXCEED))
     {
     printf("============== Now we enter type 3 icmp function\n on interface:");
-    struct sr_if * incoming_interface = sr_get_interface(sr, incoming_interface_name);
-    printf(incoming_interface_name);
-    printf("\n");
+
     /*
     printf("============== Following is current ipheader info\n");
     print_hdr_ip((uint8_t*)ipHeader);
@@ -585,7 +573,19 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
     ip_hdr.ip_sum = 0;
     ip_hdr.ip_dst = ipHeader->ip_src;
     printf("===========the incoming interface ip is \n"  );
-    ip_hdr.ip_src = incoming_interface->ip;  
+    
+	struct in_addr dest_ip_ad;
+    dest_ip_ad.s_addr = ipHeader->ip_src;
+    
+    struct sr_rt *rt = sr_longest_prefix_match(sr, dest_ip_ad);
+    
+    struct sr_if *  outgoing_interface = sr_get_interface(sr, rt->interface);
+	
+
+
+	ip_hdr.ip_src = outgoing_interface->ip;  
+
+
     printf("===========EXISTANT \n"  );
     ip_hdr.ip_len = htons( sizeof(ip_hdr) + sizeof(icmp3Header));
 
