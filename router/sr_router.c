@@ -182,15 +182,6 @@ void sr_handlepacket(struct sr_instance* sr,
             }/* End for IP packet is an ICMP packet.*/
             else if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp)
             {   /*Port unreachable (type 3, code 3) */
-<<<<<<< HEAD
-                printf("INFO: Packet contains a UDP/TCP header.\n");
-=======
-                printf("ERROR: Packet contains a UDP/TCP header. Dropping. Sending ICMP 3 type 3 reply.\n");
-                int len_temp = sizeof(interface);
-                incoming_interface_name = malloc(len_temp+1);
-                memset(incoming_interface_name, len_temp, 0);
-                memcpy(incoming_interface_name, interface, len_temp);
->>>>>>> [code cleanup]
                 
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE);
             }
@@ -214,16 +205,7 @@ void sr_handlepacket(struct sr_instance* sr,
             ip_packet_len = ntohs(ipHeader->ip_len);;
             if (ipHeader->ip_ttl == 0) 
             {
-<<<<<<< HEAD
-                sr_send_icmp(sr, (uint8_t *)ipHeader, len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
-=======
-                printf("WARNING: Packet has exceeded its TTL. Dropping. Sending ICMP3 code 0.");
-                int len_temp = sizeof(interface);
-                incoming_interface_name = malloc(len_temp+1);
-                memset(incoming_interface_name, len_temp, 0);
-                memcpy(incoming_interface_name, interface, len_temp);
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ip_packet_len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
->>>>>>> [code cleanup]
                 return;
             }
     
