@@ -29,7 +29,7 @@ void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
 
     memcpy(arp_hdr.ar_sha, interface->addr, ETHER_ADDR_LEN);
     
-	arp_hdr.ar_sip = interface->ip;
+    arp_hdr.ar_sip = interface->ip;
     arp_hdr.ar_tip = req->ip;
     
     sr_send_ethernet_packet(sr, (uint8_t *)&arp_hdr,  sizeof(sr_arp_hdr_t),  req->ip,  0,  ethertype_arp);
@@ -40,13 +40,12 @@ void send_arp_request(struct sr_instance *sr, struct sr_arpreq *req)
 
 void send_icmp_host_unreachable(struct sr_instance *sr, struct sr_arpreq *req) {
 
-	struct sr_packet *cur;
+    struct sr_packet *cur;
     
-	printf("*******************************************\n");
-	printf("************5 times ARP requests failed. will send type 3 and code 1 **************\n");
+    printf("INFO: ARP requests failed. Sending ICMP type 3 code 1.\n");
     cur = req->packets;
     while (cur != 0) 
-	{
+    {
         sr_send_icmp(sr, cur->buf, cur->len, 3, 1);
         cur = cur->next;
     }
@@ -55,19 +54,19 @@ void send_icmp_host_unreachable(struct sr_instance *sr, struct sr_arpreq *req) {
 
 void sr_arpreq_handler(struct sr_instance *sr, struct sr_arpreq *req) {
     
-	if (difftime(time(0), req->sent) > 1.0) {
+    if (difftime(time(0), req->sent) >= 1.0) {
     
         /* if five ARP requests were sent to the next-hop IP without a response, send message: Destination host unreachable (type 3, code 1) */
-        if (req->times_sent > 5) 
-		{
-			printf("=================================================5 TIMES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-			req->times_sent = 0;
+        if (req->times_sent > 4) 
+        {
+            printf("Warning: ARP request was sent five times without respone. Host unreachable.\n");
+            req->times_sent = 0;
             send_icmp_host_unreachable(sr, req);
             sr_arpreq_destroy(&sr->cache, req);        
-        } 
-		else        
-		{
-            printf("Sending ARP request for the %d time\n", req->times_sent);
+        }
+        else        
+        {
+            printf("INFO: Sending ARP request for the %d time\n", req->times_sent);
             send_arp_request(sr, req);
             req->sent = time(0);
             req->times_sent++;
@@ -90,11 +89,11 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     cur = sr->cache.requests;
     if (cur)
     {
-		next = cur->next;
-	}
+        next = cur->next;
+    }
 
     while(cur != 0) 
-	{
+    {
         sr_arpreq_handler(sr, cur);
         cur = next;
         if (cur)
