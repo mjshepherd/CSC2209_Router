@@ -6,11 +6,27 @@
 #include <time.h>
 #include <pthread.h>
 
+
+#define MAX_PORT_NUM 65536
+#define INTER_IF "eth1"
+#define EXTER_IF "eth2"
+
 typedef enum {
   nat_mapping_icmp,
   nat_mapping_tcp
   /* nat_mapping_udp, */
 } sr_nat_mapping_type;
+
+
+typedef enum {
+  ESTAB,
+  TRANS
+} sr_nat_tcp_state;
+
+typedef enum {
+  EXTER_MAP,
+  INTER_MAP
+} sr_nat_mapping_direction_type;
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
@@ -27,11 +43,20 @@ struct sr_nat_mapping {
   time_t last_updated; /* use to timeout mappings */
   struct sr_nat_connection *conns; /* list of connections. null for ICMP */
   struct sr_nat_mapping *next;
+
+  sr_nat_mapping_direction_type direction_type;
+  uint8_t *icmp_data;
 };
 
 struct sr_nat {
   /* add any fields here */
   struct sr_nat_mapping *mappings;
+
+  unsigned int icmp_timeout;
+  unsigned int tcp_establish_timeout;
+  unsigned int tcp_trans_timeout;
+  uint32_t ip_ext;
+  struct sr_instance *sr;
 
   /* threading */
   pthread_mutex_t lock;
