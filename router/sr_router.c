@@ -57,6 +57,8 @@ void sr_init(struct sr_instance* sr)
     pthread_t thread;
 
     pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
+	
+	/*INITIAL NAT HERE???? */
     
     /* Add initialization code here! */
 
