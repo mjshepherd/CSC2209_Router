@@ -30,6 +30,12 @@ typedef enum {
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
+  uint32_t ip_ext; /* external ip addr */
+  uint16_t aux_ext; /* external port or icmp id */
+  uint32_t ip_remote; /* ip addr of the other side */
+  uint16_t aux_remote;  /* port num of te other sied */
+  sr_nat_tcp_state state; /* State of the connection */
+  time_t last_updated; /* use to timeout connection */
 
   struct sr_nat_connection *next;
 };
@@ -85,5 +91,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type );
 
+struct sr_nat_mapping *sr_nat_lookup_tcp_con(struct sr_nat_mapping *nat_mapping,
+  uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_remote, uint16_t aux_remote);
 
 #endif

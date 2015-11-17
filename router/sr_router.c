@@ -21,6 +21,7 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 #include "sr_utils.h"
+#include "sr_nat.h"
 
 #define ICMP_TYPE_REPLY 0
 #define ICMP_TYPE_DEST_UNREACHABLE 3
@@ -49,6 +50,15 @@ void sr_init(struct sr_instance* sr)
 
     /* Initialize cache and cache cleanup thread */
     sr_arpcache_init(&(sr->cache));
+
+	 if (sr->nat_enabled) 
+	 {
+		if (sr_nat_init(&(sr->nat))) 
+		{
+			fprintf(stderr, "Fail to initialize NAT.\n");
+			exit(1);
+      }
+    }
 
     pthread_attr_init(&(sr->attr));
     pthread_attr_setdetachstate(&(sr->attr), PTHREAD_CREATE_JOINABLE);
