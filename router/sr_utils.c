@@ -183,3 +183,37 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
   }
 }
 
+
+/* Prints out TCP header fields */
+void print_hdr_tcp(uint8_t *buf) {
+  sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t *)(buf);
+  fprintf(stderr, "TCP header:\n");
+  fprintf(stderr, "\tsource port: %d\n", ntohs(tcp_hdr->tcp_src_port));
+  fprintf(stderr, "\tdestination port: %d\n", ntohs(tcp_hdr->tcp_dest_port));
+  fprintf(stderr, "\tseq number: %d\n", ntohl(tcp_hdr->tcp_seq_num));
+  fprintf(stderr, "\tack number: %d\n", ntohl(tcp_hdr->tcp_ack_num));
+
+  if (ntohs(tcp_hdr->tcp_off) & TCP_NS)
+    fprintf(stderr, "\tTCP flag: NS\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_CWR)
+    fprintf(stderr, "\tTCP flag: CWR\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_ECE)
+    fprintf(stderr, "\tTCP flag: ECE\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_URG)
+    fprintf(stderr, "\tTCP flag: URG\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_ACK)
+    fprintf(stderr, "\tTCP flag: ACK\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_PSH)
+    fprintf(stderr, "\tTCP flag: PSH\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_RST)
+    fprintf(stderr, "\tTCP flag: RST\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_SYN)
+    fprintf(stderr, "\tTCP flag: SYN\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_FIN)
+    fprintf(stderr, "\tTCP flag: FIN\n");
+
+  fprintf(stderr, "\twindow size: %d\n", ntohs(tcp_hdr->tcp_window_size));
+  fprintf(stderr, "\tchecksum: %d\n", ntohs(tcp_hdr->tcp_sum));
+  fprintf(stderr, "\turg: %d\n", ntohs(tcp_hdr->tcp_urg));
+}
+
