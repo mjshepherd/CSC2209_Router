@@ -77,4 +77,11 @@ void sr_set_ether_ip(struct sr_instance* , uint32_t );
 void sr_set_ether_addr(struct sr_instance* , const unsigned char* );
 void sr_print_if_list(struct sr_instance* );
 
+/* -- sr_nat.c -- */
+int nat_handlepacket(struct sr_instance* sr,
+        uint8_t * packet/* lent */,
+        unsigned int len,
+        char* interface/* lent */);
+int nat_support(uint8_t * packet, unsigned int len);
+
 #endif /* SR_ROUTER_H */

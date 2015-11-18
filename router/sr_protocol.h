@@ -102,6 +102,40 @@ struct sr_icmp_t3_hdr {
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
 
+/* 
+ * Structure of an TCP header
+ */
+struct sr_tcp_hdr
+  {
+    uint16_t tcp_src_port;
+    uint16_t tcp_dest_port;
+    uint32_t tcp_seq_num;
+    uint32_t tcp_ack_num;
+    uint16_t tcp_off;
+#define TCP_NS 0x0100
+#define TCP_CWR 0x0080
+#define TCP_ECE 0x0040
+#define TCP_URG 0x0020
+#define TCP_ACK 0x0010
+#define TCP_PSH 0x0008
+#define TCP_RST 0x0004
+#define TCP_SYN 0x0002
+#define TCP_FIN 0x0001
+    uint16_t tcp_window_size;
+    uint16_t tcp_sum;
+    uint16_t tcp_urg;
+  } __attribute__ ((packed)) ;
+typedef struct sr_tcp_hdr sr_tcp_hdr_t;
+
+struct sr_pseudo_tcp_hdr
+  {
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint8_t zeros;
+    uint8_t proto;
+    uint16_t tcp_len;
+  } __attribute__ ((packed)) ;
+typedef struct sr_pseudo_tcp_hdr sr_pseudo_tcp_hdr_t;
 
 
 /*
