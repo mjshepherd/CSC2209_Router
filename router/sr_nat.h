@@ -88,8 +88,13 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
 
 /* Insert a new mapping into the nat's mapping table.
    You must free the returned structure if it is not NULL. */
+/*
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type );
+*/
+
+struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
+  uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type, sr_nat_mapping_direction_type direction_type, uint8_t *icmp_data );
 
 struct sr_nat_mapping *sr_nat_lookup_tcp_con(struct sr_nat_mapping *nat_mapping,
   uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_remote, uint16_t aux_remote);
