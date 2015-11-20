@@ -32,6 +32,7 @@
 #include "sr_dumper.h"
 #include "sr_router.h"
 #include "sr_rt.h"
+#include "sr_nat.h"
 
 extern char* optarg;
 
@@ -55,6 +56,8 @@ static void sr_init_instance(struct sr_instance* );
 static void sr_destroy_instance(struct sr_instance* );
 static void sr_set_user(struct sr_instance* );
 static void sr_load_rt_wrap(struct sr_instance* sr, char* rtable);
+
+static void nat_init_instance(struct sr_nat* nat);
 
 /*-----------------------------------------------------------------------------
  *---------------------------------------------------------------------------*/
@@ -275,6 +278,11 @@ static void sr_destroy_instance(struct sr_instance* sr)
         sr_dump_close(sr->logfile);
     }
 
+
+	if (sr->nat_enabled) {
+        sr_nat_destroy(&(sr->nat));
+    }
+
     /*
     fprintf(stderr,"sr_destroy_instance leaking memory\n");
     */
@@ -300,7 +308,20 @@ static void sr_init_instance(struct sr_instance* sr)
     sr->routing_table = 0;
     sr->logfile = 0;
 
+	nat_init_instance(&(sr->nat));
+
 } /* -- sr_init_instance -- */
+
+
+static void nat_init_instance(struct sr_nat* nat) {
+    /* REQUIRES */
+    assert(nat);
+
+    nat->icmp_timeout = 0;
+    nat->tcp_establish_timeout = 0;
+    nat->tcp_trans_timeout = 0;
+    nat->ip_ext = 0;
+}
 
 /*-----------------------------------------------------------------------------
  * Method: sr_verify_routing_table()
