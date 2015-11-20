@@ -35,6 +35,9 @@
 
 struct sr_if * sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip);
 
+int destined_for_us(struct sr_instance *sr, struct sr_nat *nat, uint8_t* ip_packet, unsigned int len, char *interface);
+int ip_in_us(struct sr_instance *sr, sr_ip_hdr_t *ip_hdr);
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -73,6 +76,47 @@ void sr_init(struct sr_instance* sr)
     /* Add initialization code here! */
 
 } /* -- sr_init -- */
+
+
+int destined_for_us(struct sr_instance *sr, struct sr_nat *nat, uint8_t* packet, unsigned int len, char *interface) {
+  
+  sr_ip_hdr_t *ip_hdr = NULL; /*verify_ip_hdr(packet, len);*/
+
+  if (sr->nat_enabled && !strcmp(interface, EXTER_IF)) {
+    if (ip_hdr->ip_p == ip_protocol_icmp) {
+      uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
+
+      sr_icmp_hdr_t *icmp_hdr = NULL; /*verify_icmp_hdr(packet, len, data_size);*/
+      uint16_t aux_ext = 0; /*icmp_hdr->icmp_id;*/
+
+      if (sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp)) {
+        return 0;
+      }
+    } else if (ip_hdr->ip_p == ip_protocol_tcp) {
+      uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
+
+      sr_tcp_hdr_t *tcp_hdr = NULL; /*verify_tcp_hdr(packet, len, data_size);*/
+      uint16_t aux_ext = 0; /*tcp_hdr->tcp_dest_port;*/
+
+      if (sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp)) {
+        return 0;
+      }
+    }
+  }
+
+  return ip_in_us(sr, ip_hdr);
+}
+
+int ip_in_us(struct sr_instance *sr, sr_ip_hdr_t *ip_hdr) {
+  struct sr_if *if_walker = sr->if_list;
+  while(if_walker) {
+    if (if_walker->ip == ip_hdr->ip_dst) {
+      return 1;
+    }
+    if_walker = if_walker->next;
+  }
+  return 0;
+}
 
 /*---------------------------------------------------------------------
  * Method: sr_handlepacket(uint8_t* p,char* interface)
@@ -220,6 +264,32 @@ void sr_handlepacket(struct sr_instance* sr,
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ip_packet_len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
                 return;
             }
+
+
+			/*
+			int nat_result = 0;
+			if (sr->nat_enabled && nat_support(packet, len)) 
+			{
+				nat_result = nat_handlepacket(sr, packet, len, interface);
+				if (nat_result == -1) 
+				{
+					fprintf(stderr, "NAT failed to translate packet, drop it.\n");
+					return;
+				}
+				fprintf(stderr, "Following packet after NAT rewrite.\n");
+				print_hdrs(packet, len);
+			}
+
+			 if (nat_result == 2) {
+				return;
+			}
+
+			best_rt_entry = find_lpm_if(sr->routing_table, ntohl(ip_hdr->ip_dst));
+			if (nat_support(packet, len) && nat_result && best_rt_entry && strcmp(best_rt_entry->interface, interface)) {
+				fprintf(stderr, "NAT failed to translate packet, drop it.\n");
+				 return;
+			}
+			*/
     
             /* Update the checksum. */
             ipHeader->ip_sum = 0;
