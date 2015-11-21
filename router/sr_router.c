@@ -13,6 +13,8 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
+#include <stdlib.h>
 /* not for test git*/
 
 #include "sr_if.h"
@@ -77,36 +79,57 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
+/*---------------------------------------------------------------------
+ * Method: sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip)
+ * Scope:  Global
+ *
+ * Iterates thought the router's interfaces and returns the first to match
+ * the target_ip. If no match is found returns NULL
+ *
+ *---------------------------------------------------------------------*/
+struct sr_if* sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip)
+{
+    struct sr_if* ip_interface;
+    ip_interface = sr->if_list;
 
-int destined_for_us(struct sr_instance *sr, struct sr_nat *nat, uint8_t* packet, unsigned int len, char *interface) {
+    while(ip_interface)
+    {
+        if(target_ip == ip_interface->ip)
+            return ip_interface;
+        ip_interface = ip_interface->next;
+    }
+    return NULL;
+}
+
+struct sr_if* sr_retrieve_nat_interface(struct sr_instance *sr, struct sr_nat *nat, uint8_t* packet, unsigned int len, char *interface) {
+  sr_ip_hdr_t*ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));;
   
-  sr_ip_hdr_t *ip_hdr = NULL; /*verify_ip_hdr(packet, len);*/
-
-  if (sr->nat_enabled && !strcmp(interface, EXTER_IF)) {
+  if (!strcmp(interface, EXTER_IF)) {
     if (ip_hdr->ip_p == ip_protocol_icmp) {
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
 
-      sr_icmp_hdr_t *icmp_hdr = NULL; /*verify_icmp_hdr(packet, len, data_size);*/
-      uint16_t aux_ext = 0; /*icmp_hdr->icmp_id;*/
+      sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));/*verify_icmp_hdr(packet, len, data_size);*/
+      uint16_t aux_ext = icmp_hdr->icmp_id;
 
       if (sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp)) {
-        return 0;
+        return NULL;
       }
     } else if (ip_hdr->ip_p == ip_protocol_tcp) {
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
 
-      sr_tcp_hdr_t *tcp_hdr = NULL; /*verify_tcp_hdr(packet, len, data_size);*/
-      uint16_t aux_ext = 0; /*tcp_hdr->tcp_dest_port;*/
+      sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t*)(packet +  sizeof(sr_ethernet_hdr_t) + sizeof(sr_tcp_hdr_t)); /*verify_tcp_hdr(packet, len, data_size);*/
+      uint16_t aux_ext = tcp_hdr->tcp_dest_port;
 
-      if (sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp)) {
-        return 0;
+    if (sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp)) {
+        return NULL;
       }
     }
   }
-
+  /*NOTE: this returns an int right now, we have to fix that*/
   return ip_in_us(sr, ip_hdr);
 }
 
+/*NOTE: we need to mofify this to return the interface */
 int ip_in_us(struct sr_instance *sr, sr_ip_hdr_t *ip_hdr) {
   struct sr_if *if_walker = sr->if_list;
   while(if_walker) {
@@ -139,6 +162,7 @@ void sr_handlepacket(struct sr_instance* sr,
         unsigned int len,
         char* interface/* lent */)
 {
+	/*uint8_t test = 0;*/
     /* REQUIRES */
     assert(sr);
     assert(packet);
@@ -188,7 +212,13 @@ void sr_handlepacket(struct sr_instance* sr,
         
         /* Now we have two choices: The packect is destined for one of the router's interfeaces or for somewhere else. 
         First see if we can match one of our interfaces */
-        struct sr_if * destination_if = sr_retrieve_router_interface(sr, ipHeader->ip_dst);
+		struct sr_if * destination_if = NULL;
+		if (!sr->nat_enabled){
+			destination_if = sr_retrieve_router_interface(sr, ipHeader->ip_dst);
+		}else{
+			/*sent_to_us  What it wants : (struct sr_instance *sr, struct sr_nat *nat, uint8_t* packet, unsigned int len, char *interface*/
+			destination_if = sr_retrieve_nat_interface(sr,&(sr->nat), packet, len, interface);
+		}
         if (destination_if) /*Successfuly matched the IP packet's destination to one of the router's interfaces*/
         {
             printf("INFO: Packet is destined for one of the router's interface\n");
@@ -220,10 +250,12 @@ void sr_handlepacket(struct sr_instance* sr,
                     /* Send icmp echo reply. */
                     printf("INFO: ICMP packet contained an echo request. Constructing reply...\n");
                     /*The following is for testing */
-					uint16_t identifier = &icmpHeader + 64;
-					printf ("The identifier is %d\n",identifier);
+					/*uint16_t identifier = &icmpHeader + 64;
+					printf ("The identifier is %d\n",identifier);*/
 					
 					/* end of test */
+					
+					/* if (sr->nat_enabled */
                     uint32_t temp;
                     temp = ipHeader->ip_dst;
 
@@ -255,7 +287,7 @@ void sr_handlepacket(struct sr_instance* sr,
         else
         {  
             printf("INFO: Beginning forwarding logic for IP packet.\n");
-            uint8_t *forward_ip_packet;
+            /*uint8_t *forward_ip_packet;*/
             unsigned int ip_packet_len;
 
             /* Update the ip header ttl. */
@@ -337,7 +369,7 @@ void sr_handlepacket(struct sr_instance* sr,
         {
             printf("INFO: ARP packet contained a request. Beginning reply logic. \n");
 
-            int pos = 0;
+            /*int pos = 0;*/
             arpHeader->ar_op = ntohs(2);
             memcpy(arpHeader->ar_tha, arpHeader->ar_sha, ETHER_ADDR_LEN);
             memcpy(arpHeader->ar_sha, incoming_if->addr, ETHER_ADDR_LEN);
@@ -371,27 +403,8 @@ void sr_handlepacket(struct sr_instance* sr,
 }/* end sr_ForwardPacket */
 
 
-/*---------------------------------------------------------------------
- * Method: sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip)
- * Scope:  Global
- *
- * Iterates thought the router's interfaces and returns the first to match
- * the target_ip. If no match is found returns NULL
- *
- *---------------------------------------------------------------------*/
-struct sr_if* sr_retrieve_router_interface(struct  sr_instance* sr, uint32_t target_ip)
-{
-    struct sr_if* ip_interface;
-    ip_interface = sr->if_list;
 
-    while(ip_interface)
-    {
-        if(target_ip == ip_interface->ip)
-            return ip_interface;
-        ip_interface = ip_interface->next;
-    }
-    return NULL;
-}
+
 
 /*---------------------------------------------------------------------
  * Method: sr_longest_prefix_match(struct sr_instance* sr, struct in_addr addr)
@@ -530,7 +543,7 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
     uint16_t total_len;
 
    
-    sr_icmp_hdr_t* IcmpHeaderCopy;
+    /*sr_icmp_hdr_t* IcmpHeaderCopy;*/
     uint8_t *new_pkt;
 
 

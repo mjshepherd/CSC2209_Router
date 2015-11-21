@@ -70,6 +70,18 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
+void sr_send_icmp(struct sr_instance* sr, uint8_t * , unsigned int , uint8_t , uint8_t );
+struct sr_if* sr_retrieve_nat_interface(struct sr_instance *, 
+									 struct sr_nat *, 
+									 uint8_t* , 
+									 unsigned int , 
+									 char *);
+void sr_send_ethernet_packet(struct sr_instance* ,
+                            uint8_t *,
+                            unsigned int ,
+                            uint32_t ,
+                            int ,
+                            enum sr_ethertype );
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

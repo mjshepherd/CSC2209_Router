@@ -5,9 +5,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "sr_protocol.h"
 #include "sr_router.h"
-
+#include "sr_utils.h"
 
 struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, sr_nat_mapping_direction_type direction_type, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, uint8_t *icmp_data);
 uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int);
@@ -92,7 +93,7 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 				if (difftime(curtime, mapping_walker->last_updated) > 6.0) 
 				{
 					uint16_t aux_ext = mapping_walker->aux_int;
-					uint32_t ip_remote = mapping_walker->ip_ext;
+					/*uint32_t ip_remote = mapping_walker->ip_ext;*/
 
 					struct sr_nat_mapping *walker = nat->mappings;
 					while (walker) 
@@ -106,12 +107,13 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 
 					if (!walker) 
 					{
-						struct sr_instance *sr = nat->sr;
-						unsigned int length = 0;
+						/*struct sr_instance *sr = nat->sr;*/
+						/*unsigned int length = 0;*/
 						/*uint8_t *icmp_3_3 = create_icmp_packet(sr, 3, 3, 0, 0, ntohl(ip_remote), ICMP_DATA_SIZE, mapping_walker->icmp_data, &length);
 						send_packet(sr, icmp_3_3, length, mapping_walker->icmp_data);*/
 
 						free(mapping_walker->icmp_data);
+						
 					}
 
 					if (pre_mapping) 
@@ -623,7 +625,7 @@ int nat_support(uint8_t * packet, unsigned int len) {
 		}
 		else if (ip_proto == ip_protocol_icmp) 
 		{
-			uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
+			/*uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);*/
 			/*
 			sr_icmp_hdr_t *icmp_hdr = verify_icmp_hdr(packet, len, data_size);
 
