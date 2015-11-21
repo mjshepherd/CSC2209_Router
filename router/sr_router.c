@@ -219,7 +219,11 @@ void sr_handlepacket(struct sr_instance* sr,
                 {
                     /* Send icmp echo reply. */
                     printf("INFO: ICMP packet contained an echo request. Constructing reply...\n");
-                    
+                    /*The following is for testing */
+					uint16_t identifier = &icmpHeader + 64;
+					printf ("The identifier is %d\n",identifier);
+					
+					/* end of test */
                     uint32_t temp;
                     temp = ipHeader->ip_dst;
 
