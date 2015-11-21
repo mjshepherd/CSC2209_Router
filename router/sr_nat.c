@@ -552,7 +552,7 @@ int nat_handlepacket(struct sr_instance* sr,uint8_t * packet/* lent */,unsigned 
 				/* Internal ICMP packet */
 				fprintf(stderr, "*** -> NAT handling internal ICMP packet.\n");
 				uint32_t ip_int = ip_hdr->ip_src;
-				uint16_t aux_int = 0;/*icmp_hdr->icmp_id;*/
+				uint16_t aux_int = icmp_hdr->icmp_id;
 				uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
 
 				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
@@ -567,7 +567,7 @@ int nat_handlepacket(struct sr_instance* sr,uint8_t * packet/* lent */,unsigned 
 
 				/* Rewrite */
 				ip_hdr->ip_src = ip_ext;
-				/*icmp_hdr->icmp_id = aux_ext;*/
+				icmp_hdr->icmp_id = aux_ext;
 
 				memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
 				icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
@@ -578,7 +578,7 @@ int nat_handlepacket(struct sr_instance* sr,uint8_t * packet/* lent */,unsigned 
 			{
 				/* External ICMP packet */
 				fprintf(stderr, "*** -> NAT handling external ICMP packet.\n");
-				uint16_t aux_ext = 0;  /*icmp_hdr->icmp_id;*/
+				uint16_t aux_ext = icmp_hdr->icmp_id;
 
 				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp);
 				if (!nat_mapping) 
@@ -589,7 +589,7 @@ int nat_handlepacket(struct sr_instance* sr,uint8_t * packet/* lent */,unsigned 
 
 				/* Rewrite */
 				ip_hdr->ip_dst = nat_mapping->ip_int;
-				/*icmp_hdr->icmp_id = nat_mapping->aux_int;*/
+				icmp_hdr->icmp_id = nat_mapping->aux_int;
 
 				memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
 				icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
