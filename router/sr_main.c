@@ -53,11 +53,10 @@ extern char* optarg;
 
 static void usage(char* );
 static void sr_init_instance(struct sr_instance* );
+static void nat_init_instance(struct sr_nat* nat);
 static void sr_destroy_instance(struct sr_instance* );
 static void sr_set_user(struct sr_instance* );
 static void sr_load_rt_wrap(struct sr_instance* sr, char* rtable);
-
-static void nat_init_instance(struct sr_nat* nat);
 
 /*-----------------------------------------------------------------------------
  *---------------------------------------------------------------------------*/
@@ -73,12 +72,11 @@ int main(int argc, char **argv)
     unsigned int port = DEFAULT_PORT;
     unsigned int topo = DEFAULT_TOPO;
     char *logfile = 0;
+    unsigned int nat_enabled = DEFAULT_NAT_ENABLED;
+    unsigned int icmp_timeout = DEFAULT_ICMP_TIMEOUT;
+    unsigned int tcp_establish_timeout = DEFAULT_TCP_ESTABLISH_TIMEOUT;
+    unsigned int tcp_trans_timeout = DEFAULT_TRANS_TIMEOUT;
     struct sr_instance sr;
-
-	unsigned int nat_enabled = DEFAULT_NAT_ENABLED;   /*-n*/
-	unsigned int icmp_timeout = DEFAULT_ICMP_TIMEOUT;  /*-I*/
-    unsigned int tcp_establish_timeout = DEFAULT_TCP_ESTABLISH_TIMEOUT;  /*-E*/
-    unsigned int tcp_trans_timeout = DEFAULT_TRANS_TIMEOUT;   /*-R*/
 
     printf("Using %s\n", VERSION_INFO);
 
@@ -114,41 +112,26 @@ int main(int argc, char **argv)
             case 'T':
                 template = optarg;
                 break;
-			
-			case 'n':
+            case 'n':
                 fprintf(stderr, "NAT enabled.\n");
                 nat_enabled = 1;
                 break;
             case 'I':
                 icmp_timeout = atoi((char *) optarg);
-                if (icmp_timeout < DEFAULT_ICMP_TIMEOUT) {
-                    usage(argv[0]);
-                    exit(0);
-                }
                 break;
             case 'E':
-                tcp_establish_timeout = atoi((char *) optarg);
-                if (tcp_establish_timeout < DEFAULT_TCP_ESTABLISH_TIMEOUT) {
-                    usage(argv[0]);
-                    exit(0);
-                }
+                tcp_establish_timeout = atoi((char *) optarg);                
                 break;
             case 'R':
-                tcp_trans_timeout = atoi((char *) optarg);
-                if (tcp_trans_timeout < DEFAULT_TRANS_TIMEOUT) {
-                    usage(argv[0]);
-                    exit(0);
-                }
+                tcp_trans_timeout = atoi((char *) optarg);              
                 break;
         } /* switch */
     } /* -- while -- */
 
-    /* -- zero out sr instance -- */
+    /* -- zero out sr instance/nat instance -- */
     sr_init_instance(&sr);
-	
-	
 
-	sr.nat.sr = &sr;
+    sr.nat.sr = &sr;
     sr.nat_enabled = nat_enabled;
     sr.nat.icmp_timeout = icmp_timeout;
     sr.nat.tcp_establish_timeout = tcp_establish_timeout;
@@ -206,12 +189,20 @@ int main(int argc, char **argv)
     /* call router init (for arp subsystem etc.) */
     sr_init(&sr);
 
-	fprintf(stderr, "NAT enabled.\n");
-	fprintf(stderr, "ICMP query timeout interval %d seconds\n", icmp_timeout);
-	fprintf(stderr, "TCP Established Idle Timeout %d seconds\n", tcp_establish_timeout);
-	fprintf(stderr, "TCP Transitory Idle Timeout %d seconds\n", tcp_trans_timeout);
-		
-		
+	if(nat_enabled==1)
+	{
+		printf("NAT enabled\n");
+		printf("ICMP query timeout interval %d seconds\n", icmp_timeout);
+		printf("TCP Established Idle Timeout %d seconds\n", tcp_establish_timeout);
+		printf("TCP Transitory Idle Timeout %d seconds\n", tcp_trans_timeout);
+	}
+	else
+	{
+		printf("No Nat here\n");
+	}
+	
+	
+
     /* -- whizbang main loop ;-) */
     while( sr_read_from_server(&sr) == 1);
 
@@ -232,8 +223,12 @@ static void usage(char* argv0)
     printf("           [-T template_name] [-u username] \n");
     printf("           [-t topo id] [-r routing table] \n");
     printf("           [-l log file] \n");
-    printf("   defaults server=%s port=%d host=%s  \n",
-            DEFAULT_SERVER, DEFAULT_PORT, DEFAULT_HOST );
+    printf("           [-n enable nat] \n");
+    printf("           [-I icmp time out] \n");
+    printf("           [-E tcp estab time out] \n");
+    printf("           [-R tcp trans time out] \n");
+    printf("   defaults server=%s port=%d host=%s icmp time out = %d icp estab/trans time out = %d/%d\n",
+            DEFAULT_SERVER, DEFAULT_PORT, DEFAULT_HOST, DEFAULT_ICMP_TIMEOUT, DEFAULT_TCP_ESTABLISH_TIMEOUT, DEFAULT_TRANS_TIMEOUT);
 } /* -- usage -- */
 
 /*-----------------------------------------------------------------------------
@@ -278,8 +273,7 @@ static void sr_destroy_instance(struct sr_instance* sr)
         sr_dump_close(sr->logfile);
     }
 
-
-	if (sr->nat_enabled) {
+    if (sr->nat_enabled) {
         sr_nat_destroy(&(sr->nat));
     }
 
@@ -308,10 +302,8 @@ static void sr_init_instance(struct sr_instance* sr)
     sr->routing_table = 0;
     sr->logfile = 0;
 
-	nat_init_instance(&(sr->nat));
-
+    nat_init_instance(&(sr->nat));
 } /* -- sr_init_instance -- */
-
 
 static void nat_init_instance(struct sr_nat* nat) {
     /* REQUIRES */

@@ -70,6 +70,7 @@
 #include <time.h>
 #include <pthread.h>
 #include "sr_if.h"
+#include "sr_rt.h"
 
 #define SR_ARPCACHE_SZ    100  
 #define SR_ARPCACHE_TO    15.0
@@ -146,6 +147,12 @@ void sr_arpcache_dump(struct sr_arpcache *cache);
 int   sr_arpcache_init(struct sr_arpcache *cache);
 int   sr_arpcache_destroy(struct sr_arpcache *cache);
 void *sr_arpcache_timeout(void *cache_ptr);
-void sr_arpreq_handler(struct sr_instance *, struct sr_arpreq *);
+
+sr_arp_hdr_t *verify_arp_hdr(uint8_t *packet, unsigned int len);
+char* find_if_by_mac(struct sr_instance* sr, uint8_t *ether_shost);
+
+struct sr_rt* sr_get_rt_by_gateway(struct sr_instance* sr, uint32_t gateway);
+
+void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *sr_arpreq);
 
 #endif

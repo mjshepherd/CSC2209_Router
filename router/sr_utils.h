@@ -42,6 +42,11 @@ void print_hdr_ip(uint8_t *buf);
 void print_hdr_icmp(uint8_t *buf);
 void print_hdr_arp(uint8_t *buf);
 
+sr_ip_hdr_t *get_ip_hdr(uint8_t *packet, unsigned int len);
+sr_icmp_hdr_t *get_icmp_hdr(uint8_t *packet, unsigned int len, uint16_t data_size);
+sr_tcp_hdr_t *get_tcp_hdr(uint8_t *packet, unsigned int len, uint16_t data_size);
+void memcpy_byte_by_byte(void *dest, const void *src, size_t n);
+
 /* prints all headers, starting from eth */
 void print_hdrs(uint8_t *buf, uint32_t length);
 

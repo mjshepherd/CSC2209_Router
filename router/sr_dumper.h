@@ -76,4 +76,4 @@ void sr_dump(FILE *fp, const struct pcap_pkthdr *h, const unsigned char *sp);
 /**
  * Close the file
  */
-void sr_dump_close(FILE *fp);
+void sr_dump_close(FILE *fp); 

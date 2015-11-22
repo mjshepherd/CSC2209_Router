@@ -4,7 +4,6 @@
 #include "sr_protocol.h"
 #include "sr_utils.h"
 
-
 uint16_t cksum (const void *_data, int len) {
   const uint8_t *data = _data;
   uint32_t sum;
@@ -116,8 +115,42 @@ void print_hdr_icmp(uint8_t *buf) {
   fprintf(stderr, "\tcode: %d\n", icmp_hdr->icmp_code);
   /* Keep checksum in NBO */
   fprintf(stderr, "\tchecksum: %d\n", icmp_hdr->icmp_sum);
+  fprintf(stderr, "\tidentifier: %d\n", icmp_hdr->icmp_id);
+  fprintf(stderr, "\tsequence number: %d\n", icmp_hdr->icmp_seq);
 }
 
+/* Prints out TCP header fields */
+void print_hdr_tcp(uint8_t *buf) {
+  sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t *)(buf);
+  fprintf(stderr, "TCP header:\n");
+  fprintf(stderr, "\tsource port: %d\n", ntohs(tcp_hdr->tcp_src_port));
+  fprintf(stderr, "\tdestination port: %d\n", ntohs(tcp_hdr->tcp_dest_port));
+  fprintf(stderr, "\tseq number: %d\n", ntohl(tcp_hdr->tcp_seq_num));
+  fprintf(stderr, "\tack number: %d\n", ntohl(tcp_hdr->tcp_ack_num));
+
+  if (ntohs(tcp_hdr->tcp_off) & TCP_NS)
+    fprintf(stderr, "\tTCP flag: NS\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_CWR)
+    fprintf(stderr, "\tTCP flag: CWR\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_ECE)
+    fprintf(stderr, "\tTCP flag: ECE\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_URG)
+    fprintf(stderr, "\tTCP flag: URG\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_ACK)
+    fprintf(stderr, "\tTCP flag: ACK\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_PSH)
+    fprintf(stderr, "\tTCP flag: PSH\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_RST)
+    fprintf(stderr, "\tTCP flag: RST\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_SYN)
+    fprintf(stderr, "\tTCP flag: SYN\n");
+  if (ntohs(tcp_hdr->tcp_off) & TCP_FIN)
+    fprintf(stderr, "\tTCP flag: FIN\n");
+
+  fprintf(stderr, "\twindow size: %d\n", ntohs(tcp_hdr->tcp_window_size));
+  fprintf(stderr, "\tchecksum: %d\n", ntohs(tcp_hdr->tcp_sum));
+  fprintf(stderr, "\turg: %d\n", ntohs(tcp_hdr->tcp_urg));
+}
 
 /* Prints out fields in ARP header */
 void print_hdr_arp(uint8_t *buf) {
@@ -170,6 +203,15 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
       else
         print_hdr_icmp(buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
     }
+
+    if (ip_proto == ip_protocol_tcp) { /* TCP */
+      minlength += sizeof(sr_tcp_hdr_t);
+      if (length < minlength) {
+        fprintf(stderr, "Failed to print TCP header, insufficient length\n");
+      } else {
+        print_hdr_tcp(buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      }
+    }
   }
   else if (ethtype == ethertype_arp) { /* ARP */
     minlength += sizeof(sr_arp_hdr_t);
@@ -183,37 +225,82 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
   }
 }
 
+sr_ip_hdr_t *get_ip_hdr(uint8_t *packet, unsigned int len) 
+{
+	if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)) 
+	{
+		printf("ERROR: Ethernet frame did not meet minimum Ethernet + IP length. Dropping.\n");
+		return 0;
+	}
 
-/* Prints out TCP header fields */
-void print_hdr_tcp(uint8_t *buf) {
-  sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t *)(buf);
-  fprintf(stderr, "TCP header:\n");
-  fprintf(stderr, "\tsource port: %d\n", ntohs(tcp_hdr->tcp_src_port));
-  fprintf(stderr, "\tdestination port: %d\n", ntohs(tcp_hdr->tcp_dest_port));
-  fprintf(stderr, "\tseq number: %d\n", ntohl(tcp_hdr->tcp_seq_num));
-  fprintf(stderr, "\tack number: %d\n", ntohl(tcp_hdr->tcp_ack_num));
+	sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
 
-  if (ntohs(tcp_hdr->tcp_off) & TCP_NS)
-    fprintf(stderr, "\tTCP flag: NS\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_CWR)
-    fprintf(stderr, "\tTCP flag: CWR\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_ECE)
-    fprintf(stderr, "\tTCP flag: ECE\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_URG)
-    fprintf(stderr, "\tTCP flag: URG\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_ACK)
-    fprintf(stderr, "\tTCP flag: ACK\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_PSH)
-    fprintf(stderr, "\tTCP flag: PSH\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_RST)
-    fprintf(stderr, "\tTCP flag: RST\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_SYN)
-    fprintf(stderr, "\tTCP flag: SYN\n");
-  if (ntohs(tcp_hdr->tcp_off) & TCP_FIN)
-    fprintf(stderr, "\tTCP flag: FIN\n");
+	/* Compare the checksum */
+	if (cksum(ip_hdr, sizeof(sr_ip_hdr_t)) != 65535)
+	{
+		printf("ERROR: IP Packet checksum error. Dropping.\n");
+		return 0;
+	}
 
-  fprintf(stderr, "\twindow size: %d\n", ntohs(tcp_hdr->tcp_window_size));
-  fprintf(stderr, "\tchecksum: %d\n", ntohs(tcp_hdr->tcp_sum));
-  fprintf(stderr, "\turg: %d\n", ntohs(tcp_hdr->tcp_urg));
+	return ip_hdr;
 }
 
+sr_icmp_hdr_t *get_icmp_hdr(uint8_t *packet, unsigned int len, uint16_t data_size) 
+{
+  
+	if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t)) 
+	{
+		printf("ERROR:ICMP packet did not meet minimum Ethernet + IP length + ICMP header. Dropping.\n");
+		return 0;
+	}
+
+	sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+	/* Compare the checksum */
+	if (cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size) != 65535) 
+	{
+		printf("ERROR: ICMP Packet checksum error. Dropping.\n");
+		return 0;
+	}
+
+	return icmp_hdr;
+}
+
+sr_tcp_hdr_t *get_tcp_hdr(uint8_t *packet, unsigned int len, uint16_t data_size) 
+{
+	if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_tcp_hdr_t)) 
+	{
+		printf("ERROR:TCP packet did not meet minimum Ethernet + IP length + TCP header. Dropping.\n");
+		return 0;
+	}
+	
+	sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+	sr_tcp_hdr_t *tcp_hdr = (sr_tcp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
+	sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr = (sr_pseudo_tcp_hdr_t *) malloc(sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
+	pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
+	pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
+	pseudo_tcp_hdr->zeros = 0;
+	pseudo_tcp_hdr->proto = ip_protocol_tcp;
+	pseudo_tcp_hdr->tcp_len = htons(sizeof(sr_tcp_hdr_t) + data_size);
+
+	memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
+
+	if (cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size) != 65535) 
+	{
+		printf("ERROR: TCP Packet checksum error. Dropping.\n");
+		return 0;
+	}
+
+	free(pseudo_tcp_hdr);
+	return tcp_hdr;
+}
+
+void memcpy_byte_by_byte(void *dest, const void *src, size_t n) 
+{
+	int i;
+	for (i = 0; i < n; i++) 
+	{
+		memcpy((uint8_t *) dest + i, (uint8_t *) src + i, 1);
+	}
+}

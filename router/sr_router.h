@@ -27,9 +27,10 @@
 #define Debug(x, args...) do{}while(0)
 #define DebugMAC(x) do{}while(0)
 #endif
+#define INIT_TTL 64
 
-#define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
+#define MTU 1500
 
 /* forward declare */
 struct sr_if;
@@ -53,8 +54,8 @@ struct sr_instance
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
     struct sr_arpcache cache;   /* ARP cache */
-    unsigned int nat_enabled;  
-	struct sr_nat nat;       /* NAT */
+    unsigned int nat_enabled;   /* if NAT is enabled */
+    struct sr_nat nat;  /* NAT */
     pthread_attr_t attr;
     FILE* logfile;
 };
@@ -70,18 +71,8 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
-void sr_send_icmp(struct sr_instance* sr, uint8_t * , unsigned int , uint8_t , uint8_t );
-struct sr_if* sr_retrieve_nat_interface(struct sr_instance *, 
-									 struct sr_nat *, 
-									 uint8_t* , 
-									 unsigned int , 
-									 char *);
-void sr_send_ethernet_packet(struct sr_instance* ,
-                            uint8_t *,
-                            unsigned int ,
-                            uint32_t ,
-                            int ,
-                            enum sr_ethertype );
+uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint32_t ip_dst, uint16_t data_size, void *data, unsigned int *length);
+void send_packet(struct sr_instance* sr, uint8_t * packet, unsigned int len, void *icmp_data);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
