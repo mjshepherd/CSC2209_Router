@@ -47,7 +47,6 @@ sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst)
 struct sr_nat_connection* create_tcp_connection(int32_t ip_ext, uint16_t aux_ext, uint32_t ip_remote, uint16_t aux_remote) 
 {
   
-	fprintf(stderr, "*** -> Create new connection!\n");
 	struct sr_nat_connection *conn = (struct sr_nat_connection *) malloc(sizeof(struct sr_nat_connection));
 
 	conn->ip_ext = ip_ext;
@@ -80,8 +79,10 @@ void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext,
   assert(mapping_walker);
 
   struct sr_nat_connection *con_walker = mapping_walker->conns;
+  /*
   fprintf(stderr, "Looking for conection with ip_ext =  %d, aux_ext = %d, ip_remote = %d, aux_remote = %d\n", 
     ntohl(ip_ext), ntohs(aux_ext), ntohl(ip_remote), ntohs(aux_remote));
+	*/
 
   while (con_walker) 
   {
@@ -104,7 +105,7 @@ void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext,
 
   con_walker->state = calculate_tcp_state(syn, ack, fin, rst);
 
-  fprintf(stderr, "*** -> Update connection state to be %s\n", sr_nat_tcp_state_string[con_walker->state]);
+
   con_walker->last_updated = time(NULL);
 
   pthread_mutex_unlock(&(nat->lock));
@@ -298,14 +299,14 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
 
   /* handle lookup here, malloc and assign to copy */
   struct sr_nat_mapping *copy = NULL;
-  fprintf(stderr, "*** -> Looking for aux_ext = %d\n", ntohs(aux_ext));
+  /*fprintf(stderr, "*** -> Looking for aux_ext = %d\n", ntohs(aux_ext));*/
   struct sr_nat_mapping *mapping_walker = nat->mappings;
   while (mapping_walker) 
   {
-		fprintf(stderr, "*** -> Find NAT mapping with aux_ext = %d\n", ntohs(mapping_walker->aux_ext));
+		/*fprintf(stderr, "*** -> Find NAT mapping with aux_ext = %d\n", ntohs(mapping_walker->aux_ext));*/
 		if (mapping_walker->direction_type == INTER_MAP && mapping_walker->type == type && mapping_walker->aux_ext == aux_ext) 
 		{
-			fprintf(stderr, "Match!\n");
+			/*fprintf(stderr, "Match!\n");*/
 			break;
 		}
 		mapping_walker = mapping_walker->next;
@@ -402,8 +403,7 @@ int nat_handlepacket(struct sr_instance* sr,
 
     uint8_t ip_proto = ip_hdr->ip_p;
     if (ip_proto == ip_protocol_tcp) {
-      /* TCP */
-      fprintf(stderr, "*** -> NAT handling TCP packet.\n");
+     
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
 
       sr_tcp_hdr_t *tcp_hdr = get_tcp_hdr(packet, len, data_size); 
@@ -417,8 +417,7 @@ int nat_handlepacket(struct sr_instance* sr,
       int rst = ntohs(tcp_hdr->tcp_off) & TCP_RST;
 
       if (!strcmp(interface, INTER_IF)) {
-        /* Internal TCP packet */
-        fprintf(stderr, "*** -> NAT handling internal TCP packet.\n");
+        
         uint32_t ip_int = ip_hdr->ip_src;
         uint16_t aux_int = tcp_hdr->tcp_src_port;
         uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
@@ -456,8 +455,7 @@ int nat_handlepacket(struct sr_instance* sr,
         free(pseudo_tcp_hdr);
         free(nat_mapping);
       } else if (!strcmp(interface, EXTER_IF)) {
-        /* External TCP packet */
-        fprintf(stderr, "*** -> NAT handling external TCP packet.\n");
+        
         uint16_t aux_ext = tcp_hdr->tcp_dest_port;
         uint32_t ip_remote = ip_hdr->ip_src;
         uint16_t aux_remote = tcp_hdr->tcp_src_port;
@@ -501,14 +499,14 @@ int nat_handlepacket(struct sr_instance* sr,
       }
     } else if (ip_proto == ip_protocol_icmp) {
       /* ICMP */
-      fprintf(stderr, "*** -> NAT handling ICMP packet.\n");
+      
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
 
       sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
 
       if (!strcmp(interface, INTER_IF)) {
         /* Internal ICMP packet */
-        fprintf(stderr, "*** -> NAT handling internal ICMP packet.\n");
+        
         uint32_t ip_int = ip_hdr->ip_src;
         uint16_t aux_int = icmp_hdr->icmp_id;
         uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
@@ -517,10 +515,10 @@ int nat_handlepacket(struct sr_instance* sr,
         if (!nat_mapping) {
           /* Mapping not found for (ip, port), create new one */
           nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTER_MAP, NULL);
-          fprintf(stderr, "*** -> Create new NAT mapping.\n");
+          
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
-        fprintf(stderr, "*** -> NAT handling internal ICMP aux_ext = %d\n", aux_ext);
+        
 
         /* Rewrite */
         ip_hdr->ip_src = ip_ext;
@@ -532,12 +530,12 @@ int nat_handlepacket(struct sr_instance* sr,
         free(nat_mapping);
       } else if (!strcmp(interface, EXTER_IF)) {
         /* External ICMP packet */
-        fprintf(stderr, "*** -> NAT handling external ICMP packet.\n");
+        
         uint16_t aux_ext = icmp_hdr->icmp_id;
 
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp);
         if (!nat_mapping) {
-          fprintf(stderr, "*** -> Failed finding NAT mapping for external ICMP packet, drop it.\n");
+         
           return 1;
         }
 

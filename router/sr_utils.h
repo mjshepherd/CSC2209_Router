@@ -50,4 +50,9 @@ void memcpy_byte_by_byte(void *dest, const void *src, size_t n);
 /* prints all headers, starting from eth */
 void print_hdrs(uint8_t *buf, uint32_t length);
 
+uint8_t *create_icmp_hdr(uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint16_t data_size, void *data);
+uint8_t *create_icmp_t3_hdr(uint8_t icmp_type, uint8_t icmp_code, void *data);
+uint8_t *create_ip_hdr(int type3_icmp, uint8_t *icmp_hdr, uint32_t ip_src, uint32_t ip_dst, uint16_t icmp_data_size);
+uint8_t *create_ethernet_hdr(uint8_t *ip_hdr, uint8_t ether_dhost[], uint8_t  ether_shost[], uint16_t ip_len, uint16_t ethertype);
+
 #endif /* -- SR_UTILS_H -- */

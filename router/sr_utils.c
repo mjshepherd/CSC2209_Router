@@ -304,3 +304,140 @@ void memcpy_byte_by_byte(void *dest, const void *src, size_t n)
 		memcpy((uint8_t *) dest + i, (uint8_t *) src + i, 1);
 	}
 }
+
+
+uint8_t *create_icmp_hdr(uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint16_t data_size, void *data) 
+{
+  
+	sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *) malloc(sizeof(sr_icmp_hdr_t) + data_size);
+
+	if (!icmp_hdr) 
+	{
+		perror("malloc failed");
+		return 0;
+	}
+
+	icmp_hdr->icmp_type = icmp_type;
+	icmp_hdr->icmp_code = icmp_code;
+	icmp_hdr->icmp_id = icmp_id;
+	icmp_hdr->icmp_seq = icmp_seq;
+	
+
+	if (data_size > 0) 
+	{
+		fprintf(stderr, "*** -> Copy data to new ICMP.\n");
+		memcpy_byte_by_byte((uint8_t *) icmp_hdr + sizeof(sr_icmp_hdr_t), data, data_size);
+	}
+	
+	memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
+	uint16_t ck_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+	icmp_hdr->icmp_sum = ck_sum;
+
+	uint8_t *packet = (uint8_t *) icmp_hdr;
+	return packet;
+}
+
+
+uint8_t *create_icmp_t3_hdr(uint8_t icmp_type, uint8_t icmp_code, void *data) 
+{
+  
+	sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *) malloc(sizeof(sr_icmp_t3_hdr_t));
+
+	if (!icmp_hdr) 
+	{
+		perror("malloc failed");
+		return 0;
+	}
+
+	icmp_hdr->icmp_type = icmp_type;
+	icmp_hdr->icmp_code = icmp_code;
+
+	memcpy_byte_by_byte(icmp_hdr->data, data, ICMP_DATA_SIZE);
+
+	memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
+	uint16_t ck_sum = cksum(icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
+	icmp_hdr->icmp_sum = ck_sum;
+
+	uint8_t *packet = (uint8_t *) icmp_hdr;
+	return packet;
+}
+
+
+uint8_t *create_ip_hdr(int type3_icmp, uint8_t *icmp_hdr, uint32_t ip_src, uint32_t ip_dst, uint16_t icmp_data_size) 
+{
+
+	sr_ip_hdr_t *ip_hdr;
+	uint16_t ip_len;
+
+	if (type3_icmp) 
+	{
+		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+	}
+	else 
+	{
+		ip_len = sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t) + icmp_data_size;
+	}
+
+	ip_hdr = (sr_ip_hdr_t *) malloc(ip_len);
+
+	if (!ip_hdr) 
+	{
+		perror("malloc failed");
+		return 0;
+	}
+
+	ip_hdr->ip_v = 4;
+	ip_hdr->ip_hl = 5;
+	ip_hdr->ip_tos = 0;
+	ip_hdr->ip_len = htons(ip_len);
+	ip_hdr->ip_id = htons(0);
+	ip_hdr->ip_off = htons(0);
+	ip_hdr->ip_ttl = 64;
+	ip_hdr->ip_p = ip_protocol_icmp;
+	ip_hdr->ip_src = htonl(ip_src);
+	ip_hdr->ip_dst = htonl(ip_dst);
+
+	memset(&(ip_hdr->ip_sum), 0, sizeof(uint16_t));
+	uint16_t ck_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+	ip_hdr->ip_sum = ck_sum;
+
+	memcpy_byte_by_byte((uint8_t *) ip_hdr + sizeof(sr_ip_hdr_t), icmp_hdr, ip_len - sizeof(sr_ip_hdr_t));
+	free(icmp_hdr);
+
+	return (uint8_t *) ip_hdr;
+}
+
+
+uint8_t *create_ethernet_hdr(uint8_t *ip_hdr, uint8_t ether_dhost[], uint8_t  ether_shost[], uint16_t ip_len, uint16_t ethertype) 
+{
+	sr_ethernet_hdr_t *ethernet_hdr = (sr_ethernet_hdr_t *) malloc(sizeof(sr_ethernet_hdr_t) + ip_len);
+
+	if (!ethernet_hdr) 
+	{
+		perror("malloc failed");
+		return 0;
+	}
+
+	int i;
+	for (i = 0; i < ETHER_ADDR_LEN; i++) 
+	{
+		if (ether_dhost != NULL) 
+		{
+			ethernet_hdr->ether_dhost[i] = ether_dhost[i];
+		}
+		if (ether_shost != NULL) 
+		{
+			ethernet_hdr->ether_shost[i] = ether_shost[i];
+		}
+	}
+
+	ethernet_hdr->ether_type = htons(ethertype);
+
+	memcpy_byte_by_byte((uint8_t *) ethernet_hdr + sizeof(sr_ethernet_hdr_t), ip_hdr, ip_len);
+	free(ip_hdr);
+
+	return (uint8_t *) ethernet_hdr;
+
+}
+
+
