@@ -44,6 +44,10 @@ extern char* optarg;
 #define DEFAULT_SERVER "localhost"
 #define DEFAULT_RTABLE "rtable"
 #define DEFAULT_TOPO 0
+#define DEFAULT_NAT_ENABLED 0
+#define DEFAULT_ICMP_TIMEOUT 60
+#define DEFAULT_TCP_ESTABLISH_TIMEOUT 7440
+#define DEFAULT_TRANS_TIMEOUT 300
 
 static void usage(char* );
 static void sr_init_instance(struct sr_instance* );
@@ -66,10 +70,13 @@ int main(int argc, char **argv)
     unsigned int topo = DEFAULT_TOPO;
     char *logfile = 0;
     struct sr_instance sr;
-
+    unsigned int nat_enabled = DEFAULT_NAT_ENABLED;
+    unsigned int icmp_timeout = DEFAULT_ICMP_TIMEOUT;
+    unsigned int tcp_establish_timeout = DEFAULT_TCP_ESTABLISH_TIMEOUT;
+    unsigned int tcp_trans_timeout = DEFAULT_TRANS_TIMEOUT;
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:")) != EOF)
+    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:n")) != EOF)
     {
         switch (c)
         {
@@ -101,11 +108,21 @@ int main(int argc, char **argv)
             case 'T':
                 template = optarg;
                 break;
+            case 'n':   
+                nat_enabled = 1;
+                fprintf(stderr, "NAT Enabled. \n");
+                break;
         } /* switch */
     } /* -- while -- */
 
     /* -- zero out sr instance -- */
     sr_init_instance(&sr);
+
+    /* -- set up nat parameters --*/
+    sr.nat_enabled = nat_enabled;
+    sr.nat.icmp_timeout = icmp_timeout;
+    sr.nat.tcp_establish_timeout = tcp_establish_timeout;
+    sr.nat.tcp_trans_timeout = tcp_trans_timeout;
 
     /* -- set up routing table from file -- */
     if(template == NULL) {
