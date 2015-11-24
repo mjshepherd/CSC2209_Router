@@ -195,6 +195,7 @@ sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst) {
   return TRANS;
 }
 
+/* TODO: This will need refactoring, should just call a lookup internally */
 void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_remote, uint16_t aux_remote, int syn, int ack, int fin, int rst) 
 {
   /* Requires */
