@@ -24,6 +24,17 @@
 #include "sr_utils.h"
 #include "sr_nat.h"
 
+
+#define ICMP_TYPE_REPLY 0
+#define ICMP_TYPE_DEST_UNREACHABLE 3
+#define ICMP_TYPE_REQUEST 8
+#define ICMP_TYPE_TIME_EXCEED 11
+
+#define ICMP_CODE_ZERO 0
+#define ICMP_CODE_ONE 1
+#define ICMP_CODE_THREE 3
+
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -98,11 +109,13 @@ void sr_init(struct sr_instance* sr)
     /* Initialize cache/nat and cache cleanup thread */
     sr_arpcache_init(&(sr->cache));
 
-    if (sr->nat_enabled) {
-      if (sr_nat_init(&(sr->nat))) {
-        fprintf(stderr, "Fail to initialize NAT.\n");
-        exit(1);
-      }
+    if (sr->nat_enabled) 
+	{
+		if (sr_nat_init(&(sr->nat))) 
+		{			
+			printf ("ERROR: Fail to initialize NAT\n");
+			exit(1);
+		}
     }
 
     pthread_attr_init(&(sr->attr));
@@ -143,36 +156,38 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 	  /*assert(sr_get_interface(sr, interface));*/
 
 	  if (len < sizeof(sr_ethernet_hdr_t)) 
-	  {
-			fprintf(stderr, "Failed to handle the packet due to insufficient length, drop it\n");
+	  {			
+			printf ("ERROR: Failed to handle the packet due to insufficient length, drop it\n");
 			return;
 	  };
 	  
 	  /*NOTE:ignore this if statement for now, it never activates*/
-	  if (0 == sr_get_interface(sr, interface)){ /*send port unreachable*/
-		printf ("Testing, GOT HERE!");
-		/*sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));*/
-		sr_ethernet_hdr_t *ether_hdr =  (sr_ethernet_hdr_t *) packet;
-		uint32_t destination = ntohl(ether_hdr->ether_shost);
-		uint32_t source = ntohl(ether_hdr->ether_dhost);
-		uint8_t *icmp_packet = create_icmp_packet(sr, 3, 3, 0, 0, destination, ICMP_DATA_SIZE, NULL, &len,source);
+	  if (0 == sr_get_interface(sr, interface))   /*send port unreachable*/
+	  { 
+			printf ("INFO:  Testing, GOT HERE!\n");
+			/*sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));*/
+			sr_ethernet_hdr_t *ether_hdr =  (sr_ethernet_hdr_t *) packet;
+			uint32_t destination = ntohl(ether_hdr->ether_shost);
+			uint32_t source = ntohl(ether_hdr->ether_dhost);
+			uint8_t *icmp_packet = create_icmp_packet(sr, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE, 0, 0, destination, ICMP_DATA_SIZE, NULL, &len,source);   
 						
-		if (icmp_packet) 
-		{
-			send_packet(sr, icmp_packet, len,NULL );
-		}
-		else
-		{
-			fprintf(stderr, "Failed to create an ICMP Port-Unreachable packet\n");
-		}
+			if (icmp_packet) 
+			{
+				send_packet(sr, icmp_packet, len,NULL );
+			}
+			else
+			{
+				printf ("ERROR: Failed to create an ICMP Port-Unreachable packet\n");
+			}
 
 		return;
 	  }
 	  struct sr_if *sr_if = sr_get_interface(sr, interface);
 
-	  fprintf(stderr, "----------------------------------------\n");
- 	  fprintf(stderr, "Received following packet\n");
-	  print_hdrs(packet, len);
+	  printf ("-------------------------------------------------\n");
+	  printf ("INFO: Received packet %d bytes\n", len);
+
+	  /*print_hdrs(packet, len);  We do not want print head info*/
 
 	  uint16_t ethtype = ethertype(packet);
 
@@ -187,43 +202,44 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 
 			uint8_t *ip_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
 			memcpy_byte_by_byte(ip_data, ip_hdr, ICMP_DATA_SIZE);
-			uint32_t ip_intended_dst_icmp = ntohl(ip_hdr->ip_dst);
+			uint32_t ip_intended_dst_icmp = ntohl(ip_hdr->ip_dst);    
 			uint32_t ip_dst_icmp = ntohl(ip_hdr->ip_src);
 			
 			if (destined_for_us(sr, &(sr->nat), packet, len, interface))    /* Packet for us */
 			{
       
-				 fprintf(stderr, "*** -> Recevied IP packet for us.\n");
+				 printf ("INFO: The IP packet for us\n");
 				 
 				 uint8_t ip_proto = ip_hdr->ip_p;
 
 				 if (ip_proto == ip_protocol_icmp) 
 				 {
 						/* ICMP for us */
-						uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
 
-						fprintf(stderr, "*** -> Recevied ICMP packet for us.\n");
-						sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
+						uint16_t data_size = ntohs(ip_hdr->ip_len)-sizeof(sr_ip_hdr_t)-sizeof(sr_icmp_hdr_t);
 
-						if (!icmp_hdr) 
+						printf ("INFO: The ICMP packet for us\n");
+						sr_icmp_hdr_t *icmp_header = get_icmp_hdr(packet, len, data_size);
+
+						if (!icmp_header) 
 						{
 							free(ip_data);
 							return;
 						}
 
-						if (icmp_hdr->icmp_type == echo_request) 
+						if (icmp_header->icmp_type == echo_request) 
 						{
-          
-							fprintf(stderr, "*** -> Recevied ICMP echo request for us.\n");
+          							
+							printf ("INFO: Get A ICMP request for us\n");
 
 							uint8_t *data = (uint8_t *) malloc(data_size);
-							memcpy_byte_by_byte(data, (uint8_t *) icmp_hdr + sizeof(sr_icmp_hdr_t), data_size);
+							memcpy_byte_by_byte(data, (uint8_t *) icmp_header + sizeof(sr_icmp_hdr_t), data_size);
 
 							uint8_t *icmp_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
 							memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
 
 							unsigned int length = 0;
-							uint8_t *icmp_packet = create_icmp_packet(sr, 0, 0, icmp_hdr->icmp_id, icmp_hdr->icmp_seq, ip_dst_icmp, data_size, data, &length,0);
+							uint8_t *icmp_packet = create_icmp_packet(sr, ICMP_TYPE_REPLY, ICMP_CODE_ZERO, icmp_header->icmp_id, icmp_header->icmp_seq, ip_dst_icmp, data_size, data, &length,0);
 			  
 							if (icmp_packet) 
 							{
@@ -238,7 +254,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 						} 
 						else 
 						{
-							fprintf(stderr, "Failed to handle the ICMP packet due to type unrecognized, drop it\n");
+							printf ("ERROR: Failed to handle the ICMP packet due to unrecognized type, drop it\n");
 							free(ip_data);
 							return;
 						}
@@ -351,61 +367,76 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
       free(ip_data);
       return;
     }
-  } else if (ethtype == ethertype_arp) {
-    /* ARP */
-    fprintf(stderr, "*** -> Recevied ARP packet.\n");
-    sr_arp_hdr_t *arp_hdr = verify_arp_hdr(packet, len);
-    if (!arp_hdr) {
-      return;
-    }
-    unsigned short ar_op = ntohs(arp_hdr->ar_op);
+  }        /* end for handle IP packet*/
+	else if (ethtype == ethertype_arp)    /* ARP */
+	{
+		printf ("INFO: Recevied AN ARP packet\n");
+		sr_arp_hdr_t *arp_hdr = verify_arp_hdr(packet, len);
+    
+		if (!arp_hdr) 
+		{
+			return;
+		}
+    
+		unsigned short ar_op = ntohs(arp_hdr->ar_op);
 
-    if (ar_op == arp_op_request) {
-      /* Handle ARP request */
-      fprintf(stderr, "*** -> Recevied ARP request.\n");
-      sr_arp_hdr_t *arp_rep = create_arp_rep_hdr(arp_hdr, sr_if);
-      uint8_t *arp_packet = create_ethernet_hdr((uint8_t *) arp_rep, arp_rep->ar_tha, arp_rep->ar_sha, sizeof(sr_arp_hdr_t), ethertype_arp);
+    
+		if (ar_op == arp_op_request) 
+		{
+			
+		      sr_arp_hdr_t *arp_rep = create_arp_rep_hdr(arp_hdr, sr_if);
 
-      sr_send_packet(sr, arp_packet, sizeof(sr_arp_hdr_t) + sizeof(sr_ethernet_hdr_t), interface);
-    } else if (ar_op == arp_op_reply) {
-      /* Handle ARP reply */
+			  uint8_t *arp_packet = create_ethernet_hdr((uint8_t *) arp_rep, arp_rep->ar_tha, arp_rep->ar_sha, sizeof(sr_arp_hdr_t), ethertype_arp);
 
-      struct sr_arpreq *arpreq = sr_arpcache_insert(&(sr->cache), arp_hdr->ar_sha, arp_hdr->ar_sip);
-      if (arpreq) {
-        /* Send packets that are wating for this ARP reply */
-        fprintf(stderr, "*** -> Recevied ARP reply.\n");
-        struct sr_packet* packet_walker = arpreq->packets;
+			  sr_send_packet(sr, arp_packet, sizeof(sr_arp_hdr_t) + sizeof(sr_ethernet_hdr_t), interface);
+		} 
+		else if (ar_op == arp_op_reply)   /* Handle ARP reply */
+		{
+      
+			struct sr_arpreq *arpreq = sr_arpcache_insert(&(sr->cache), arp_hdr->ar_sha, arp_hdr->ar_sip);
+			if (arpreq)     /* Send packets that are wating for this ARP reply */
+			{
+				
+				struct sr_packet* packet_walker = arpreq->packets;
 
-        while (packet_walker) {
-          uint8_t *buf = packet_walker->buf;
-          unsigned int length = packet_walker->len;
+				while (packet_walker) 
+				{
+					uint8_t *buf = packet_walker->buf;
+					unsigned int length = packet_walker->len;
 
-          if (length < sizeof(sr_ethernet_hdr_t)) {
-            fprintf(stderr, "Failed to handle the packet due to insufficient length, drop it\n");
-            return;
-          };
+					if (length < sizeof(sr_ethernet_hdr_t)) 
+					{
+						printf ("ERROR: Failed to handle the packet due to insufficient length, drop it\n");
+						return;
+					};
 
-          sr_ethernet_hdr_t *ethernet_packet = (sr_ethernet_hdr_t *) buf;
-          int i;
-          for (i = 0; i < ETHER_ADDR_LEN; i++) {
-            ethernet_packet->ether_dhost[i] = arp_hdr->ar_sha[i];
-          }
+					sr_ethernet_hdr_t *ethernet_packet = (sr_ethernet_hdr_t *) buf;
+					
+					int i = 0;
+					for (i = 0; i < ETHER_ADDR_LEN; i++) 
+					{
+						ethernet_packet->ether_dhost[i] = arp_hdr->ar_sha[i];
+					}
 
-          sr_send_packet(sr, buf, length, packet_walker->iface);
+					sr_send_packet(sr, buf, length, packet_walker->iface);
 
-          packet_walker = packet_walker->next;
-        }
-      }
-      sr_arpreq_destroy(&(sr->cache), arpreq);
-    } else {
-      fprintf(stderr, "Unrecognized ARP Type: %d\n", ar_op);
-      return;
-    }
-  } else {
-    fprintf(stderr, "Unrecognized Ethernet Type: %d\n", ethtype);
-    return;
-  }
-  fprintf(stderr, "----------------------------------------\n");
+					packet_walker = packet_walker->next;
+				}
+			}
+			sr_arpreq_destroy(&(sr->cache), arpreq);
+		}     
+		else     /*  NOT request or reply, we can not handle it*/
+		{
+			printf ("ERROR: Failed to handle the packet due to unrecognized ARP Type: %d\n", ar_op);
+			return;
+		}
+	}    /*  NOT IP or ARP packet, we can not handle it*/
+	else 
+	{
+		printf ("ERROR: Failed to handle the packet due to ethernet Type: %d\n", ethtype);
+		return;
+	}
+    printf ("--------------------------------------------\n");
 
 }/* end sr_ForwardPacket */
 
@@ -425,13 +456,14 @@ void send_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, void
 	if (!best_rt_entry) 
 	{
 		/* Fail to match in routing table */
-		fprintf(stderr, "Failed to handle the IP packet due to routing table no match, drop it\n");
+		printf ("ERROR: Failed to handle the IP packet due to routing table no match, drop it\n");
 
 		/* Send ICMP destination net unreachable back to sender */
 		uint32_t ip_dst_icmp = ntohl(ip_hdr->ip_src);
 		unsigned int length = 0;
 
 		void *data = malloc(ICMP_DATA_SIZE);
+
 		memcpy_byte_by_byte(data, ip_hdr, ICMP_DATA_SIZE);
 
 		uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length,0);
@@ -449,7 +481,7 @@ void send_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, void
   
 	if (!outgoing_if) 
 	{
-		fprintf(stderr, "Couln't find interface according to routing table\n");
+		printf ("ERROR: Failed to find interface in the routing table\n");
 		return;
 	}
   
@@ -489,7 +521,7 @@ sr_arp_hdr_t *create_arp_rep_hdr(sr_arp_hdr_t *arp_req, struct sr_if *sr_if)
 
 	  if (!arp_rep) 
 	  {
-			perror("malloc failed");
+			printf ("ERROR: Fail to create arp request due to memory\n");
 			return 0;
 	  }
 
@@ -518,7 +550,7 @@ sr_arp_hdr_t *create_arp_req_hdr(struct sr_instance* sr, struct sr_arpreq *req, 
 
 		if (!arp_req) 
 		{
-			perror("malloc failed");
+			printf ("ERROR: Fail to create arp request due to memory\n");
 			return 0;
 		}
 
@@ -586,14 +618,18 @@ uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t i
   
 	if (!icmp_packet) 
 	{
-		fprintf(stderr, "Fail creating ICMP packet\n");
+		printf ("ERROR: Fail to create ICMP reply packet\n");
 		return NULL;
 	}
 
 	uint32_t ip_src = 0;
-	if (icmp_type == 3 && icmp_code == 3){
+
+	if (icmp_type == 3 && icmp_code == 3)
+	{
 		ip_src = icmp33_src;
-	}else{
+	}
+	else
+	{
 		struct sr_rt *best_rt = sr_find_longest_prefix_match_interface(sr->routing_table, ip_dst);
 	
 		if (best_rt) 
@@ -605,19 +641,21 @@ uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t i
 			}
 		}
 	}
+
 	uint8_t *ip_packet = create_ip_hdr(icmp_type == 3 || icmp_type == 11, icmp_packet, ip_src, ip_dst, data_size);
 	if (!ip_packet) 
 	{
-		fprintf(stderr, "Fail creating IP packet\n");
+		printf ("ERROR: Fail to create IP packet\n");
 		return NULL;
 	}
 	
 	int len = ntohs(((sr_ip_hdr_t *) ip_packet)->ip_len);
 
 	uint8_t *ethernet_packet = create_ethernet_hdr(ip_packet, NULL, NULL, len, ethertype_ip);
+
 	if (!ethernet_packet) 
 	{
-		fprintf(stderr, "Fail creating ethernet packet\n");
+		printf ("ERROR: Fail to create ethernet packet\n");
 		return NULL;
 	}
 
