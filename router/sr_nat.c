@@ -25,10 +25,12 @@ uint16_t get_external_port(uint32_t ip_int, uint16_t aux_int)
 	return result;
 }
 
+/*
 static const char *sr_nat_tcp_state_string[] = {
     "ESTAB",
     "TRANS"
 };
+*/
 
 sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst) 
 {
