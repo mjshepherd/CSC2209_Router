@@ -128,7 +128,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
    Actually returns a copy to the new mapping, for thread safety.
  */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
-  uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type) {
+  uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type) {
 
   pthread_mutex_lock(&(nat->lock));
 
