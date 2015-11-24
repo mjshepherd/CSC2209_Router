@@ -150,15 +150,13 @@ struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, uint32_t ip_
   struct sr_nat_mapping *result = (struct sr_nat_mapping *) malloc(sizeof(struct sr_nat_mapping));
 
   result->type = type;
-  result->direction_type = direction_type;
-  result->ip_int = ip_int;
+ result->ip_int = ip_int;
   result->ip_ext = ip_ext;
   result->aux_int = aux_int;
   result->aux_ext = calculate_external_port(ip_int, aux_int);
   result->last_updated = time(NULL);
-  result->conns = NULL;
+  result->conns = NULL; /*TODO:Handle connections for TCP*/
   result->next = NULL;
-  result->packet_data = packet;
 
   return result;
 }
