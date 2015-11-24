@@ -63,7 +63,7 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
 /* Get the mapping associated with given external port.
    You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
-    uint16_t aux_ext, sr_nat_mapping_type type ) {
+    uint16_t aux_ext) {
 
     pthread_mutex_lock(&(nat->lock));
 
@@ -74,7 +74,7 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
     struct sr_nat_mapping *mapping_walker = nat->mappings;
     while (mapping_walker) 
     {
-        if (mapping_walker->direction_type == INTERNAL && mapping_walker->type == type && mapping_walker->aux_ext == aux_ext) 
+        if (mapping_walker->aux_ext == aux_ext) 
         {
             fprintf(stderr, "INFO: Found NAT mapping with aux_ext = %d\n", ntohs(mapping_walker->aux_ext));
             break;
