@@ -71,7 +71,7 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
-uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint32_t ip_dst, uint16_t data_size, void *data, unsigned int *length);
+uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint32_t ip_dst, uint16_t data_size, void *data, unsigned int *length, uint32_t icmp33_src);
 void send_packet(struct sr_instance* sr, uint8_t * packet, unsigned int len, void *icmp_data);
 sr_arp_hdr_t *create_arp_req_hdr(struct sr_instance* sr, struct sr_arpreq *req, struct sr_if* sr_if);
 

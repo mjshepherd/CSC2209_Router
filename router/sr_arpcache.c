@@ -76,7 +76,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *sr_arpreq) {
         memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
 
         unsigned int length = 0;
-        uint8_t *icmp_packet = create_icmp_packet(sr, 3, 1, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, icmp_data, &length);
+        uint8_t *icmp_packet = create_icmp_packet(sr, 3, 1, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, icmp_data, &length,0);
         if (icmp_packet) {
           send_packet(sr, icmp_packet, length, icmp_data);
         }

@@ -140,18 +140,38 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 	  assert(sr);
 	  assert(packet);
 	  assert(interface);
-	  assert(sr_get_interface(sr, interface));
+	  /*assert(sr_get_interface(sr, interface));*/
 
 	  if (len < sizeof(sr_ethernet_hdr_t)) 
 	  {
 			fprintf(stderr, "Failed to handle the packet due to insufficient length, drop it\n");
 			return;
 	  };
+	  
+	  /*NOTE:This is an attempt to fix the port unreachable problem*/
+	  if (0 == sr_get_interface(sr, interface)){ /*send port unreachable*/
+		printf ("Testing, GOT HERE!");
+		/*sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));*/
+		sr_ethernet_hdr_t *ether_hdr =  (sr_ethernet_hdr_t *) packet;
+		uint32_t destination = ntohl(ether_hdr->ether_shost);
+		uint32_t source = ntohl(ether_hdr->ether_dhost);
+		uint8_t *icmp_packet = create_icmp_packet(sr, 3, 3, 0, 0, destination, ICMP_DATA_SIZE, NULL, &len,source);
+						
+		if (icmp_packet) 
+		{
+			send_packet(sr, icmp_packet, len,NULL );
+		}
+		else
+		{
+			fprintf(stderr, "Failed to create an ICMP Port-Unreachable packet\n");
+		}
 
+		return;
+	  }
 	  struct sr_if *sr_if = sr_get_interface(sr, interface);
 
 	  fprintf(stderr, "----------------------------------------\n");
-	  fprintf(stderr, "Received following packet\n");
+ 	  fprintf(stderr, "Received following packet\n");
 	  print_hdrs(packet, len);
 
 	  uint16_t ethtype = ethertype(packet);
@@ -167,9 +187,9 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 
 			uint8_t *ip_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
 			memcpy_byte_by_byte(ip_data, ip_hdr, ICMP_DATA_SIZE);
-
+			uint32_t ip_intended_dst_icmp = ntohl(ip_hdr->ip_dst);
 			uint32_t ip_dst_icmp = ntohl(ip_hdr->ip_src);
-
+			
 			if (destined_for_us(sr, &(sr->nat), packet, len, interface))    /* Packet for us */
 			{
       
@@ -203,7 +223,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 							memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
 
 							unsigned int length = 0;
-							uint8_t *icmp_packet = create_icmp_packet(sr, 0, 0, icmp_hdr->icmp_id, icmp_hdr->icmp_seq, ip_dst_icmp, data_size, data, &length);
+							uint8_t *icmp_packet = create_icmp_packet(sr, 0, 0, icmp_hdr->icmp_id, icmp_hdr->icmp_seq, ip_dst_icmp, data_size, data, &length,0);
 			  
 							if (icmp_packet) 
 							{
@@ -235,7 +255,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 						}
 
 						unsigned int length = 0;
-						uint8_t *icmp_packet = create_icmp_packet(sr, 3, 3, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length);
+						uint8_t *icmp_packet = create_icmp_packet(sr, 3, 3, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,ip_intended_dst_icmp);
 						
 						if (icmp_packet) 
 						{
@@ -272,7 +292,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
         void *data = malloc(ICMP_DATA_SIZE);
         memcpy_byte_by_byte(data, ip_hdr, ICMP_DATA_SIZE);
 
-        uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length);
+        uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length, 0);
         if (icmp_packet) {
           send_packet(sr, icmp_packet, length, data);
         }
@@ -311,7 +331,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
         fprintf(stderr, "*** -> Failed to forward the IP packet due to TTL reaching zero, drop it\n");
 
         unsigned int length = 0;
-        uint8_t *icmp_packet = create_icmp_packet(sr, 11, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length);
+        uint8_t *icmp_packet = create_icmp_packet(sr, 11, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,0);
         if (icmp_packet) {
         send_packet(sr, icmp_packet, length, ip_data);
         }
@@ -414,7 +434,7 @@ void send_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, void
 		void *data = malloc(ICMP_DATA_SIZE);
 		memcpy_byte_by_byte(data, ip_hdr, ICMP_DATA_SIZE);
 
-		uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length);
+		uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length,0);
     
 		if (icmp_packet) 
 		{
@@ -550,7 +570,7 @@ struct sr_rt*  sr_find_longest_prefix_match_interface(struct sr_rt *rt, uint32_t
 
 
 
-uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint32_t ip_dst, uint16_t data_size, void *data, unsigned int *length) 
+uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t icmp_code, uint16_t icmp_id, uint16_t icmp_seq, uint32_t ip_dst, uint16_t data_size, void *data, unsigned int *length, uint32_t icmp33_src) 
 {
   
 	uint8_t *icmp_packet;
@@ -571,17 +591,20 @@ uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t i
 	}
 
 	uint32_t ip_src = 0;
-	struct sr_rt *best_rt = sr_find_longest_prefix_match_interface(sr->routing_table, ip_dst);
+	if (icmp_type == 3 && icmp_code == 3){
+		ip_src = icmp33_src;
+	}else{
+		struct sr_rt *best_rt = sr_find_longest_prefix_match_interface(sr->routing_table, ip_dst);
 	
-	if (best_rt) 
-	{
-		struct sr_if *outgoing_if = sr_get_interface(sr, best_rt->interface);
-		if (outgoing_if) 
+		if (best_rt) 
 		{
-			ip_src = htonl(outgoing_if->ip);
+			struct sr_if *outgoing_if = sr_get_interface(sr, best_rt->interface);
+			if (outgoing_if) 
+			{
+				ip_src = htonl(outgoing_if->ip);
+			}
 		}
 	}
-
 	uint8_t *ip_packet = create_ip_hdr(icmp_type == 3 || icmp_type == 11, icmp_packet, ip_src, ip_dst, data_size);
 	if (!ip_packet) 
 	{

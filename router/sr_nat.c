@@ -188,7 +188,9 @@ void *sr_nat_timeout(void *nat_ptr)
 					{
 						uint16_t aux_ext = mapping_walker->aux_int;
 						uint32_t ip_remote = mapping_walker->ip_ext;
-
+						/*NOTE:ip_src here is something of a filler, 
+						 * we need to get the original destination address of the incoming packet here instead*/
+						uint32_t ip_src = mapping_walker->ip_int;
 						struct sr_nat_mapping *walker = nat->mappings;
 						while (walker) 
 						{
@@ -203,7 +205,7 @@ void *sr_nat_timeout(void *nat_ptr)
 						{
 							struct sr_instance *sr = nat->sr;
 							unsigned int length = 0;
-							uint8_t *icmp_3_3 = create_icmp_packet(sr, 3, 3, 0, 0, ntohl(ip_remote), ICMP_DATA_SIZE, mapping_walker->icmp_data, &length);
+							uint8_t *icmp_3_3 = create_icmp_packet(sr, 3, 3, 0, 0, ntohl(ip_remote), ICMP_DATA_SIZE, mapping_walker->icmp_data, &length,ntohl(ip_src));
 							send_packet(sr, icmp_3_3, length, mapping_walker->icmp_data);
 
 							free(mapping_walker->icmp_data);
