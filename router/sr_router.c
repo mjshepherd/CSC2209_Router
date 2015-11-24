@@ -148,7 +148,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 			return;
 	  };
 	  
-	  /*NOTE:This is an attempt to fix the port unreachable problem*/
+	  /*NOTE:ignore this if statement for now, it never activates*/
 	  if (0 == sr_get_interface(sr, interface)){ /*send port unreachable*/
 		printf ("Testing, GOT HERE!");
 		/*sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));*/
@@ -194,7 +194,7 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 			{
       
 				 fprintf(stderr, "*** -> Recevied IP packet for us.\n");
-
+				 
 				 uint8_t ip_proto = ip_hdr->ip_p;
 
 				 if (ip_proto == ip_protocol_icmp) 
