@@ -295,18 +295,17 @@ void *sr_nat_timeout(void *nat_ptr)
 
 /* Get the mapping associated with given external port.
    You must free the returned structure if it is not NULL. */
-struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
-    uint16_t aux_ext, sr_nat_mapping_type type ) 
+struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat, uint16_t aux_ext, sr_nat_mapping_type type ) 
 {
 
-  pthread_mutex_lock(&(nat->lock));
+	pthread_mutex_lock(&(nat->lock));
 
-  /* handle lookup here, malloc and assign to copy */
-  struct sr_nat_mapping *copy = NULL;
-  /*fprintf(stderr, "*** -> Looking for aux_ext = %d\n", ntohs(aux_ext));*/
-  struct sr_nat_mapping *mapping_walker = nat->mappings;
-  while (mapping_walker) 
-  {
+	/* handle lookup here, malloc and assign to copy */
+	struct sr_nat_mapping *copy = NULL;
+	/*fprintf(stderr, "*** -> Looking for aux_ext = %d\n", ntohs(aux_ext));*/
+	struct sr_nat_mapping *mapping_walker = nat->mappings;
+	while (mapping_walker) 
+	{
 		/*fprintf(stderr, "*** -> Find NAT mapping with aux_ext = %d\n", ntohs(mapping_walker->aux_ext));*/
 		if (mapping_walker->direction_type == INTER_MAP && mapping_walker->type == type && mapping_walker->aux_ext == aux_ext) 
 		{
@@ -314,16 +313,16 @@ struct sr_nat_mapping *sr_nat_lookup_external(struct sr_nat *nat,
 			break;
 		}
 		mapping_walker = mapping_walker->next;
-  }
+	}
 
-  if (mapping_walker) 
-  {
+	if (mapping_walker) 
+	{
 		copy = (struct sr_nat_mapping*) malloc(sizeof(struct sr_nat_mapping));
 		memcpy_byte_by_byte(copy, mapping_walker, sizeof(struct sr_nat_mapping));
-  }
+	}
 
-  pthread_mutex_unlock(&(nat->lock));
-  return copy;
+	pthread_mutex_unlock(&(nat->lock));
+	return copy;
 }
 
 /* Get the mapping associated with given internal (ip, port) pair.
@@ -381,207 +380,284 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,uint32_t ip_int,
 	return copy;
 }
 
-int nat_handlepacket(struct sr_instance* sr,
-        uint8_t * packet/* lent */,
-        unsigned int len,
-        char* interface/* lent */) {
-/* REQUIRES */
-  assert(sr);
-  assert(packet);
-  assert(interface);
+int nat_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */, unsigned int len,  char* interface/* lent */) 
+{
+	/* REQUIRES */
+	assert(sr);
+	assert(packet);
+	assert(interface);
 
-  struct sr_if *iface = sr_get_interface(sr, interface);
-  assert(iface);
+	struct sr_if *iface = sr_get_interface(sr, interface);
+	assert(iface);
 
-  struct sr_nat *nat = &(sr->nat);
-  assert(nat);
+	struct sr_nat *nat = &(sr->nat);
+	assert(nat);
 
-  uint16_t ethtype = ethertype(packet);
+	uint16_t ethtype = ethertype(packet);
 
-  if (ethtype == ethertype_ip) {
-    /* IP */
-    sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
-    if (!ip_hdr) {
-      return -1;
-    }
+	if (ethtype == ethertype_ip)      /* This is an IP packet */
+	{
+		
+		sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+		if (!ip_hdr) 
+		{
+			return -1;
+		}
 
-    uint8_t ip_proto = ip_hdr->ip_p;
-    if (ip_proto == ip_protocol_tcp) {
+		uint8_t ip_proto = ip_hdr->ip_p;
+		if (ip_proto == ip_protocol_tcp) 
+		{
      
-      uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
+			uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
 
-      sr_tcp_hdr_t *tcp_hdr = get_tcp_hdr(packet, len, data_size); 
-      if (!tcp_hdr) {
-        return -1;
-      }
+			sr_tcp_hdr_t *tcp_hdr = get_tcp_hdr(packet, len, data_size); 
+			if (!tcp_hdr) 
+			{
+				return -1;
+			}
 
-      int syn = ntohs(tcp_hdr->tcp_off) & TCP_SYN;
-      int ack = ntohs(tcp_hdr->tcp_off) & TCP_ACK;
-      int fin = ntohs(tcp_hdr->tcp_off) & TCP_FIN;
-      int rst = ntohs(tcp_hdr->tcp_off) & TCP_RST;
+			int syn = ntohs(tcp_hdr->tcp_off) & TCP_SYN;
+			int ack = ntohs(tcp_hdr->tcp_off) & TCP_ACK;
+			int fin = ntohs(tcp_hdr->tcp_off) & TCP_FIN;
+			int rst = ntohs(tcp_hdr->tcp_off) & TCP_RST;
 
-      if (!strcmp(interface, INTER_IF)) {
+			if (!strcmp(interface, INTER_IF)) 
+			{
         
-        uint32_t ip_int = ip_hdr->ip_src;
-        uint16_t aux_int = tcp_hdr->tcp_src_port;
-        uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
+				uint32_t ip_int = ip_hdr->ip_src;
+				uint16_t aux_int = tcp_hdr->tcp_src_port;
+				uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
 
-        struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_tcp);
-        if (!nat_mapping) {
-          /* Mapping not found for (ip, port), create new one */
-          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_tcp, INTER_MAP, NULL);
-        }
-        uint16_t aux_ext = nat_mapping->aux_ext;
-        uint32_t ip_remote = ip_hdr->ip_dst;
-        uint16_t aux_remote = tcp_hdr->tcp_dest_port;
-
-        update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
-
-        /* Rewrite */
-        ip_hdr->ip_src = ip_ext;
-        tcp_hdr->tcp_src_port = aux_ext;
-
-        memset(&(tcp_hdr->tcp_sum), 0, sizeof(uint16_t));
-
-        sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr = (sr_pseudo_tcp_hdr_t *) malloc(sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
-        pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
-        pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
-        pseudo_tcp_hdr->zeros = 0;
-        pseudo_tcp_hdr->proto = ip_protocol_tcp;
-        pseudo_tcp_hdr->tcp_len = htons(sizeof(sr_tcp_hdr_t) + data_size);
-
-        memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
-
-        tcp_hdr->tcp_sum = cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
-        memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
-        assert(cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size) == 65535);
-
-        free(pseudo_tcp_hdr);
-        free(nat_mapping);
-      } else if (!strcmp(interface, EXTER_IF)) {
-        
-        uint16_t aux_ext = tcp_hdr->tcp_dest_port;
-        uint32_t ip_remote = ip_hdr->ip_src;
-        uint16_t aux_remote = tcp_hdr->tcp_src_port;
-        uint32_t ip_ext = ip_hdr->ip_dst;
-
-        struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp);
-        if (!nat_mapping) {
-          uint8_t *icmp_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
-          memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
-          sr_nat_insert_mapping(nat, 0, ip_remote, aux_ext, nat_mapping_tcp, EXTER_MAP, icmp_data);
-          return 2;
-         
-        }
-
-        update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
-
-        /* Rewrite */
-        ip_hdr->ip_dst = nat_mapping->ip_int;
-        tcp_hdr->tcp_dest_port = nat_mapping->aux_int;
-
-        memset(&(tcp_hdr->tcp_sum), 0, sizeof(uint16_t));
-
-        sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr = (sr_pseudo_tcp_hdr_t *) malloc(sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
-        pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
-        pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
-        pseudo_tcp_hdr->zeros = 0;
-        pseudo_tcp_hdr->proto = ip_protocol_tcp;
-        pseudo_tcp_hdr->tcp_len = htons(sizeof(sr_tcp_hdr_t) + data_size);
-
-        memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
-
-        tcp_hdr->tcp_sum = cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
-        memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
-        assert(cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size) == 65535);
-
-        free(pseudo_tcp_hdr);
-        free(nat_mapping);
-      } else {
-        fprintf(stderr, "Unknown interface\n");
-        exit(1);
-      }
-    } else if (ip_proto == ip_protocol_icmp) {
-      /* ICMP */
-      
-      uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
-
-      sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
-
-      if (!strcmp(interface, INTER_IF)) {
-        /* Internal ICMP packet */
-        
-        uint32_t ip_int = ip_hdr->ip_src;
-        uint16_t aux_int = icmp_hdr->icmp_id;
-        uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
-
-        struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
-        if (!nat_mapping) {
-          /* Mapping not found for (ip, port), create new one */
-          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTER_MAP, NULL);
+				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_tcp);
+				if (!nat_mapping)    /* Mapping not found for (ip, port), create new one */
+				{
           
-        }
-        uint16_t aux_ext = nat_mapping->aux_ext;
+					nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_tcp, INTER_MAP, NULL);
+				}
+
+				uint16_t aux_ext = nat_mapping->aux_ext;
+				uint32_t ip_remote = ip_hdr->ip_dst;
+				uint16_t aux_remote = tcp_hdr->tcp_dest_port;
+
+				update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
+
+				/* Rewrite */
+				ip_hdr->ip_src = ip_ext;
+				tcp_hdr->tcp_src_port = aux_ext;
+
+				memset(&(tcp_hdr->tcp_sum), 0, sizeof(uint16_t));
+
+				sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr = (sr_pseudo_tcp_hdr_t *) malloc(sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
+				pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
+				pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
+				pseudo_tcp_hdr->zeros = 0;
+				pseudo_tcp_hdr->proto = ip_protocol_tcp;
+				pseudo_tcp_hdr->tcp_len = htons(sizeof(sr_tcp_hdr_t) + data_size);
+
+				memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
+
+				tcp_hdr->tcp_sum = cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
+				memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
+				assert(cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size) == 65535);
+
+				free(pseudo_tcp_hdr);
+				free(nat_mapping);
+			} 
+			
+			else if (!strcmp(interface, EXTER_IF)) 
+			{
         
+				uint16_t aux_ext = tcp_hdr->tcp_dest_port;
+				uint32_t ip_remote = ip_hdr->ip_src;
+				uint16_t aux_remote = tcp_hdr->tcp_src_port;
+				uint32_t ip_ext = ip_hdr->ip_dst;
 
-        /* Rewrite */
-        ip_hdr->ip_src = ip_ext;
-        icmp_hdr->icmp_id = aux_ext;
+				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp);
+				if (!nat_mapping) 
+				{
+					  uint8_t *icmp_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
+					  memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
+					  sr_nat_insert_mapping(nat, 0, ip_remote, aux_ext, nat_mapping_tcp, EXTER_MAP, icmp_data);
+					  return 2;
+				}
 
-        memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
-        icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+				update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
 
-        free(nat_mapping);
-      } else if (!strcmp(interface, EXTER_IF)) {
-        /* External ICMP packet */
+				/* Rewrite */
+				ip_hdr->ip_dst = nat_mapping->ip_int;
+				tcp_hdr->tcp_dest_port = nat_mapping->aux_int;
+
+				memset(&(tcp_hdr->tcp_sum), 0, sizeof(uint16_t));
+
+				sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr = (sr_pseudo_tcp_hdr_t *) malloc(sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
+				pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
+				pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
+				pseudo_tcp_hdr->zeros = 0;
+				pseudo_tcp_hdr->proto = ip_protocol_tcp;
+				pseudo_tcp_hdr->tcp_len = htons(sizeof(sr_tcp_hdr_t) + data_size);
+
+				memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
+
+				tcp_hdr->tcp_sum = cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size);
+				memcpy_byte_by_byte(((uint8_t *) pseudo_tcp_hdr) + sizeof(sr_pseudo_tcp_hdr_t), tcp_hdr, sizeof(sr_tcp_hdr_t) + data_size);
+				assert(cksum(pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t) + sizeof(sr_tcp_hdr_t) + data_size) == 65535);
+
+				free(pseudo_tcp_hdr);
+				free(nat_mapping);
+      
+			} 
+			else 
+			{
+				fprintf(stderr, "Unknown interface\n");
+				exit(1);
+			}
+    
+		}    /*End for handling IP packet*/
+
+		else if (ip_proto == ip_protocol_icmp)          /* handle ICMP packet*/
+		{
+ 
+		    uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
+
+			sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
+
+			printf ("=======================================\n");   
+			printf ("ICMP packet incoming interface is %s.\n", interface);   
+			   
+			/*If ping from 10.0.1.100, interface will be eth1*/
+
+
+			if (!strcmp(interface, INTER_IF)) 
+			{
+				printf ("ICMP packet come from eth1 and want to forward this packet to server\n"); 
+				printf ("=======================================\n");
+				/* Internal ICMP packet */
+				print_hdr_ip((uint8_t*)ip_hdr);
+				print_hdr_icmp((uint8_t*)icmp_hdr);
+				printf ("Above is original IP header.\n");
+				uint32_t ip_int = ip_hdr->ip_src;
+				uint16_t aux_int = icmp_hdr->icmp_id;
+				uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
+
+				/*printf ("ip ext is ");*/
+				/*print_addr_ip_int(ntohl(ip_ext));*/
+				printf ("\n");
+
+				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
+				if (!nat_mapping) 
+				{
+					/* Mapping not found for (ip, port), create new one */
+					printf ("We do not find a (" );
+					print_addr_ip_int(ntohl(ip_int));
+					printf (" , %d) pair, we need to create a mapping for this packet\n",aux_int);  
+					nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTER_MAP, NULL);
+          
+				}
+				else
+				{
+					printf ("**************  We FIND a (ip, icmp_id) pair ****************\n");  
+				}
+
+				uint16_t aux_ext = nat_mapping->aux_ext;
+				printf ("it comes from nat-mapping: aux_ext is %d\n", aux_ext);
+
+				/* Rewrite */
+				ip_hdr->ip_src = ip_ext;
+				icmp_hdr->icmp_id = aux_ext;
+
+				memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
+				icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+				print_hdr_icmp((uint8_t*)icmp_hdr);
+				printf ("**************  Before we return  ****************\n");  
+				free(nat_mapping);
+			} 
+			
+			else if (!strcmp(interface, EXTER_IF)) 
+			{
         
-        uint16_t aux_ext = icmp_hdr->icmp_id;
+				/* External ICMP packet */
+				printf ("ICMP packet come from eth2 and want to forward this packet to client 10.0.1.100\n"); 
+				printf ("=======================================\n");
+        
+				uint16_t aux_ext = icmp_hdr->icmp_id;
+				printf ("Before we start to look up the external mapping, first print aut_ext is %d\n", aux_ext); 
 
-        struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp);
-        if (!nat_mapping) {
-         
-          return 1;
-        }
+				struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp);
+				if (!nat_mapping) 
+				{
+					printf ("Not find a mapping\n");
+					return 1;
+				}
+				else
+				{
+					printf ("We can find a mapping as the following:\n");
+					printf ("------%d\n--------", nat_mapping->aux_ext); 
+					print_addr_ip_int(ntohl(nat_mapping->ip_ext));
+					printf ("------%d\n--------", nat_mapping->aux_int); 
+					print_addr_ip_int(ntohs(nat_mapping->ip_int)); 
+				
+				}
 
-        /* Rewrite */
-        ip_hdr->ip_dst = nat_mapping->ip_int;
-        icmp_hdr->icmp_id = nat_mapping->aux_int;
+				/* Rewrite */
+				ip_hdr->ip_dst = nat_mapping->ip_int;
+				icmp_hdr->icmp_id = nat_mapping->aux_int;
 
-        memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
-        icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+				memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
+				icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+					printf ("------Following is the  rewrite packet info\n--------"); 
+				print_hdrs(packet, len);
 
-        free(nat_mapping);
-      }
-    } else if (ip_proto == ip_protocol_udp) {
-      return 0;
-    } else {
-      return 0;
-    }
+				free(nat_mapping);
+			}
+		}   /*End for handling TCP packet*/
+		
+		else if (ip_proto == ip_protocol_udp) 
+		{
+			return 0;
+		} 
+		else 
+		{
+			return 0;
+		}
   }
 
   return 0;
 }
 
-int nat_support(uint8_t * packet, unsigned int len) {
-  uint16_t ethtype = ethertype(packet);
+int nat_support(uint8_t * packet, unsigned int len)   /* NAT only support TCP, ICMP request and ICMP reply type*/
+{
+  
+	uint16_t ethtype = ethertype(packet);
 
-  if (ethtype == ethertype_ip) {
-    sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+	if (ethtype == ethertype_ip) 
+	{
+		sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
 
-    uint8_t ip_proto = ip_hdr->ip_p;
-    if (ip_proto == ip_protocol_tcp) {
-      return 1;
-    } else if (ip_proto == ip_protocol_icmp) {
-      uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
-      sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
+		uint8_t ip_proto = ip_hdr->ip_p;
+		if (ip_proto == ip_protocol_tcp) 
+		{
+			printf("============This is a TCP packet, NAT support it.\n");
+			return 1;
+		} 
+		else if (ip_proto == ip_protocol_icmp) 
+		{
+			uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
+			sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
 
-      if (icmp_hdr->icmp_type == 0 || icmp_hdr->icmp_type == 8) {
-        return 1;
-      }
-    }
-  }
+			if( icmp_hdr->icmp_type == 0 )
+			{
+				printf("============This is a ICMP reply packet, NAT support it.\n");
+				return 1;
+			}
+			if( icmp_hdr->icmp_type == 8 )
+			{
+				printf("============This is a ICMP request packet, NAT support it.\n");
+				return 1;
+			}
+		}
+	}
 
-  return 0;
+	return 0;
 }
 
 struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, sr_nat_mapping_direction_type direction_type, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, uint8_t *icmp_data) 

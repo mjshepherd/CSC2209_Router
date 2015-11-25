@@ -69,6 +69,8 @@ int destined_for_us(struct sr_instance *sr, struct sr_nat *nat, uint8_t* packet,
 {
   
 	sr_ip_hdr_t *ip_hdr = get_ip_hdr(packet, len);
+	printf ("receiving packet interface is %s\n", interface);
+	printf ("EXTER_IF is eth2 \n");
 
 	if (sr->nat_enabled && !strcmp(interface, EXTER_IF)) 
 	{
@@ -262,16 +264,15 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 				 }    /* end for icmp packet handle*/
 				 else if (ip_proto == ip_protocol_tcp || ip_proto == ip_protocol_udp) 
 				 {
-						/* TCP or UDP for us */
-						fprintf(stderr, "*** -> Recevied TCP/UDP for us.\n");
-
+						/* TCP or UDP for us */				
+						printf ("INFO:  Recevied TCP/UDP for us\n");
 						if (!strcmp(interface, EXTER_IF)) 
 						{
 							goto forward;
 						}
 
 						unsigned int length = 0;
-						uint8_t *icmp_packet = create_icmp_packet(sr, 3, 3, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,ip_intended_dst_icmp);
+						uint8_t *icmp_packet = create_icmp_packet(sr, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,ip_intended_dst_icmp);
 						
 						if (icmp_packet) 
 						{
@@ -284,38 +285,46 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 				else 
 				{
 						/* Other ip protocol type for us */
-						fprintf(stderr, "Unrecognized Ip Type: %d\n", ip_proto);
+						
+						printf ("ERROR:  We do not know this IP type: %d\n", ip_proto);
 						free(ip_data);
 						return;
 				}
 			} 
 			else 
 			{
-      /* Packet not for us */
-      forward:
-        fprintf(stderr, "*** -> Recevied IP packet not for us.\n");
+      /* IP Packet not for us */
+      forward:        
+		printf ("INFO:  The IP packet is not for us\n");
 
       struct sr_rt *best_rt_entry = sr_find_longest_prefix_match_interface(sr->routing_table, ntohl(ip_hdr->ip_dst));
       if (!best_rt_entry && !strcmp(interface, INTER_IF))
 	  {
-        /* Fail to match in routing table */
-        fprintf(stderr, "Failed to handle the IP packet due to routing table no match, drop it\n");
+			/* Fail to match in routing table */
+			printf ("ERROR:  Failed to handle the IP packet due to the unmatch routing table, drop it\n");
 
-        /* Send ICMP destination net unreachable back to sender */
-        uint32_t ip_dst_icmp = ntohl(ip_hdr->ip_src);
-        unsigned int length = 0;
+			/* Send ICMP destination net unreachable back to sender */
+			uint32_t ip_dst_icmp = ntohl(ip_hdr->ip_src);
+			unsigned int length = 0;
 
-        void *data = malloc(ICMP_DATA_SIZE);
-        memcpy_byte_by_byte(data, ip_hdr, ICMP_DATA_SIZE);
+			void *data = malloc(ICMP_DATA_SIZE);
+			memcpy_byte_by_byte(data, ip_hdr, ICMP_DATA_SIZE);
 
-        uint8_t *icmp_packet = create_icmp_packet(sr, 3, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length, 0);
-        if (icmp_packet) {
-          send_packet(sr, icmp_packet, length, data);
-        }
-        return;
+			uint8_t *icmp_packet = create_icmp_packet(sr, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_ZERO, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, data, &length, 0);
+			if (icmp_packet) 
+			{
+				send_packet(sr, icmp_packet, length, data);
+			}
+			return;
       }
 
       int nat_result = 0;
+
+	  if (sr->nat_enabled)
+	  {
+		  printf ("We will test nat support for this packet or not.\n");
+	  }
+	  
       if (sr->nat_enabled && nat_support(packet, len)) 
 	  {
 			nat_result = nat_handlepacket(sr, packet, len, interface);
@@ -324,36 +333,42 @@ void sr_handlepacket(struct sr_instance* sr, uint8_t * packet/* lent */,unsigned
 				fprintf(stderr, "NAT failed to translate packet, drop it.\n");
 				return;
 			}
-			printf("============NAT handle packet\n");
-
-			fprintf(stderr, "Following packet after NAT rewrite.\n");
+			printf("============NAT already rewrite packet, following is detail info\n");
+			
 			print_hdrs(packet, len);
+			printf ("-----------------------------------------------------\n");
+			
+			
       }
 
-      if (nat_result == 2) {
-        return;
+      if (nat_result == 2) 
+	  {
+			return;
       }
 
       best_rt_entry = sr_find_longest_prefix_match_interface(sr->routing_table, ntohl(ip_hdr->ip_dst));
-      if (nat_support(packet, len) && nat_result && best_rt_entry && strcmp(best_rt_entry->interface, interface)) {
-        fprintf(stderr, "NAT failed to translate packet, drop it.\n");
-        return;
+      if (nat_support(packet, len) && nat_result && best_rt_entry && strcmp(best_rt_entry->interface, interface)) 
+	  {
+			fprintf(stderr, "NAT failed to translate packet, drop it.\n");
+			return;
       }
 
 
       /* Decrement and check TTL */
       uint8_t new_ip_ttl = ip_hdr->ip_ttl - 1;
-      if (new_ip_ttl == 0) {
-        fprintf(stderr, "*** -> Failed to forward the IP packet due to TTL reaching zero, drop it\n");
+      if (new_ip_ttl == 0) 
+	  {
+			fprintf(stderr, "*** -> Failed to forward the IP packet due to TTL reaching zero, drop it\n");
 
-        unsigned int length = 0;
-        uint8_t *icmp_packet = create_icmp_packet(sr, 11, 0, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,0);
-        if (icmp_packet) {
-        send_packet(sr, icmp_packet, length, ip_data);
-        }
+			unsigned int length = 0;
+			uint8_t *icmp_packet = create_icmp_packet(sr, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO, 0, 0, ip_dst_icmp, ICMP_DATA_SIZE, ip_data, &length,0);
+			if (icmp_packet) 
+			{
+				send_packet(sr, icmp_packet, length, ip_data);
+			}
 
-        free(ip_data);
-        return;
+			free(ip_data);
+			return;
       }
       ip_hdr->ip_ttl = new_ip_ttl;
 
