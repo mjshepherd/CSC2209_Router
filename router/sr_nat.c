@@ -139,7 +139,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   mapping->next = nat->mappings;
   nat->mappings = mapping;
 
-  copy = (struct sr_nat_mapping*) malloc(sizeof(struct sr_nat_mapping));
+  struct sr_nat_mapping* copy = (struct sr_nat_mapping*) malloc(sizeof(struct sr_nat_mapping));
   memcpy(copy, mapping, sizeof(struct sr_nat_mapping)); 
   
   pthread_mutex_unlock(&(nat->lock));
