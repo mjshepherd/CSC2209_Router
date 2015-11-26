@@ -45,6 +45,7 @@ struct sr_nat_mapping {
 };
 
 struct sr_nat {
+  struct sr_instance *sr;
   /* add any fields here */
   struct sr_nat_mapping *mappings;
   unsigned int icmp_timeout;

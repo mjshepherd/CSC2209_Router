@@ -112,6 +112,15 @@ int main(int argc, char **argv)
                 nat_enabled = 1;
                 fprintf(stderr, "NAT Enabled. \n");
                 break;
+            case 'I':
+                icmp_timeout = atoi((char *) optarg);
+                break;
+            case 'E':
+                tcp_establish_timeout = atoi((char *) optarg);                
+                break;
+            case 'R':
+                tcp_trans_timeout = atoi((char *) optarg);              
+                break;
         } /* switch */
     } /* -- while -- */
 
@@ -120,6 +129,7 @@ int main(int argc, char **argv)
 
     /* -- set up nat parameters --*/
     sr.nat_enabled = nat_enabled;
+    sr.nat.sr = &sr;
     sr.nat.icmp_timeout = icmp_timeout;
     sr.nat.tcp_establish_timeout = tcp_establish_timeout;
     sr.nat.tcp_trans_timeout = tcp_trans_timeout;
@@ -247,6 +257,15 @@ static void sr_destroy_instance(struct sr_instance* sr)
     */
 } /* -- sr_destroy_instance -- */
 
+static void nat_init_instance(struct sr_nat* nat) {
+    /* REQUIRES */
+    assert(nat);
+
+    nat->icmp_timeout = 0;
+    nat->tcp_establish_timeout = 0;
+    nat->tcp_trans_timeout = 0;
+}
+
 /*-----------------------------------------------------------------------------
  * Method: sr_init_instance(..)
  * Scope: Local
@@ -266,6 +285,8 @@ static void sr_init_instance(struct sr_instance* sr)
     sr->if_list = 0;
     sr->routing_table = 0;
     sr->logfile = 0;
+ 
+   nat_init_instance(&(sr->nat));
 } /* -- sr_init_instance -- */
 
 /*-----------------------------------------------------------------------------

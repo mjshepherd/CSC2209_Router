@@ -53,11 +53,11 @@ void sr_init(struct sr_instance* sr)
     /* Initialize NAT if enabled */
     if (sr->nat_enabled)
     {
-        if (!sr_nat_init(&(sr->nat)))
-        {
-            fprintf(stderr, "ERROR: Failed to initialize NAT");
-            exit(1);
-        }
+      if (sr_nat_init(&(sr->nat)))
+      {
+        fprintf(stderr, "ERROR: Failed to initialize NAT. Error code: %d \n", sr_nat_init(&(sr->nat)));
+        exit(1);
+      }
     }
 
     pthread_attr_init(&(sr->attr));
@@ -98,18 +98,14 @@ void sr_handlepacket(struct sr_instance* sr,
     assert(packet);
     assert(interface);
     
-    printf("*** -> Received packet of length %d \n",len);
-
-    /* print_hdr_eth(packet); */
-
+    printf("INFO:  Received packet of length %d \n",len);
+    print_hdrs(packet, len);
     /* Check ethertype of packet */
     uint16_t ethtype = ethertype(packet);
     unsigned int ethAddressHeaderLength = sizeof(sr_ethernet_hdr_t);
 
     if ( ethtype == ethertype_ip) 
     {
-        printf("==============================================\n");
-        printf("==============================================\n");
         printf("INFO: Recieved an ip packet \n");
 
         /* Begin sanity checking the packet */
@@ -140,6 +136,15 @@ void sr_handlepacket(struct sr_instance* sr,
         }
         /* End of IP packet checking*/
         
+
+        /* NAT TRANSLATION */
+        if (sr->nat_enabled) {
+            fprintf(stderr, "INFO: Beginning packet address translation. \n");
+            sr_nat_translate_packet(sr, packet, len, interface);
+            fprintf(stderr, "INFO: Packet translation has finished. The following is the translated packet: \n");
+            print_hdrs(packet, len);
+        }
+
         /* Now we have two choices: The packect is destined for one of the router's interfeaces or for somewhere else. 
         First see if we can match one of our interfaces */
         struct sr_if * destination_if = sr_retrieve_router_interface(sr, ipHeader->ip_dst);
