@@ -128,13 +128,13 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
    Actually returns a copy to the new mapping, for thread safety.
  */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
-  uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type, uint8_t *packet ) {
+  uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type) {
 
   pthread_mutex_lock(&(nat->lock));
 
   /* handle insert here, create a mapping, and then return a copy of it */
   struct sr_nat_mapping *mapping = NULL;
-  struct sr_nat_mapping *mapping = create_nat_mapping(type, direction_type, ip_int, ip_ext, aux_int, icmp_data);
+  struct sr_nat_mapping *mapping = create_nat_mapping(type, ip_int, ip_ext, aux_int);
 
   mapping->next = nat->mappings;
   nat->mappings = mapping;
@@ -143,7 +143,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   return mapping;
 }
 
-struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, sr_nat_mapping_direction_type direction_type, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, uint8_t *packet) {
+struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int) {
   struct sr_nat_mapping *result = (struct sr_nat_mapping *) malloc(sizeof(struct sr_nat_mapping));
 
   result->type = type;
@@ -353,7 +353,7 @@ int nat_handlepacket(struct sr_instance* sr,
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
         if (!nat_mapping) {
           /* Mapping not found for (ip, port), create new one */
-          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTER_MAP, NULL);
+          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTERNAL, NULL);
           
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
