@@ -172,15 +172,15 @@ uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int) {
 }
 
 struct sr_nat_connection* create_connection(int32_t ip_ext, uint16_t aux_ext, 
-  uint32_t ip_remote, uint16_t aux_remote) {
+  uint32_t ip_int, uint16_t aux_int) {
 
   fprintf(stderr, "INFO:  Creating new connection!\n");
   struct sr_nat_connection *result = (struct sr_nat_connection *) malloc(sizeof(struct sr_nat_connection));
 
   result->ip_ext = ip_ext;
   result->aux_ext = aux_ext;
-  result->ip_remote = ip_remote;
-  result->aux_remote = aux_remote;
+  result->ip_int = ip_int;
+  result->aux_ext = aux_ext;
   result->state = TRANS;
 
   return result;
