@@ -21,10 +21,6 @@ typedef enum {
   TRANS,
 } sr_nat_tcp_state;
 
-typedef enum {
-  EXTERNAL,
-  INTERNAL
-} sr_nat_mapping_direction_type;
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
@@ -81,6 +77,19 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
    You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type);
+
+struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int);
+
+uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int);
+
+struct sr_nat_connection* create_connection(int32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int);
+
+sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst);
+
+void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int, 
+                          int syn, int ack, int fin, int rst);
+
+int sr_nat_translate_packet(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface/* lent */);
 
 /* NAT cron job. Runs every second and is used to clean defunct mappings */
 void sr_nat_clean(struct sr_nat *nat, time_t time);

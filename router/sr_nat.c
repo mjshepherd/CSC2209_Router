@@ -4,8 +4,11 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "sr_nat.h"
 
+#include "sr_protocol.h"
+#include "sr_router.h"
+#include "sr_utils.h"
+#include "sr_nat.h"
 
 int sr_nat_init(struct sr_nat *nat) { /* Initializes the nat */
 
@@ -133,7 +136,6 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   pthread_mutex_lock(&(nat->lock));
 
   /* handle insert here, create a mapping, and then return a copy of it */
-  struct sr_nat_mapping *mapping = NULL;
   struct sr_nat_mapping *mapping = create_nat_mapping(type, ip_int, ip_ext, aux_int);
 
   mapping->next = nat->mappings;
@@ -162,7 +164,7 @@ struct sr_nat_mapping* create_nat_mapping(sr_nat_mapping_type type, uint32_t ip_
 }
 
 uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int) {
-  uint16_t result = (ip_int + aux_int) % MAX_PORT_NUM;
+  uint16_t result = (ip_int + aux_int) % MAX_PORT_NUMBER;
 
   if (result < 1024) {
     result += 1024;
@@ -171,8 +173,7 @@ uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int) {
   return result;
 }
 
-struct sr_nat_connection* create_connection(int32_t ip_ext, uint16_t aux_ext, 
-  uint32_t ip_int, uint16_t aux_int) {
+struct sr_nat_connection* create_connection(int32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int) {
 
   fprintf(stderr, "INFO:  Creating new connection!\n");
   struct sr_nat_connection *result = (struct sr_nat_connection *) malloc(sizeof(struct sr_nat_connection));
@@ -196,7 +197,7 @@ sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst) {
 }
 
 /* TODO: This will need refactoring, should just call a lookup internally */
-void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_remote, uint16_t aux_remote, int syn, int ack, int fin, int rst) 
+void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int, int syn, int ack, int fin, int rst) 
 {
   /* Requires */
   assert(nat);
@@ -217,15 +218,15 @@ void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext,
 
   struct sr_nat_connection *con_walker = mapping_walker->conns;
 
-  fprintf(stderr, "Looking for conection with ip_ext =  %d, aux_ext = %d, ip_remote = %d, aux_remote = %d\n", 
-    ntohl(ip_ext), ntohs(aux_ext), ntohl(ip_remote), ntohs(aux_remote));
+  fprintf(stderr, "Looking for conection with ip_ext =  %d, aux_ext = %d, ip_int = %d, aux_int = %d\n", 
+    ntohl(ip_ext), ntohs(aux_ext), ntohl(ip_int), ntohs(aux_int));
 
   while (con_walker) 
   {
     if (con_walker->ip_ext == ip_ext &&
       con_walker->aux_ext == aux_ext &&
-      con_walker->ip_remote == ip_remote &&
-      con_walker->aux_remote == aux_remote) 
+      con_walker->ip_int == ip_int &&
+      con_walker->aux_int == aux_int) 
     {
       break;
     }
@@ -234,7 +235,6 @@ void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext,
 
   if (!con_walker) 
   {
-    con_walker = create_tcp_connection(ip_ext, aux_ext, ip_remote, aux_remote);
     con_walker->next = mapping_walker->conns;
     mapping_walker->conns = con_walker;
   }
@@ -245,7 +245,7 @@ void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext,
   pthread_mutex_unlock(&(nat->lock));
 }
 
-int nat_handlepacket(struct sr_instance* sr,
+int sr_nat_translate_packet(struct sr_instance* sr,
         uint8_t * packet/* lent */,
         unsigned int len,
         char* interface/* lent */) {
@@ -265,9 +265,6 @@ int nat_handlepacket(struct sr_instance* sr,
   if (ethtype == ethertype_ip) {
     /* IP */
     sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
-    if (!ip_hdr) {
-      return -1;
-    }
 
     uint8_t ip_proto = ip_hdr->ip_p;
     if (ip_proto == ip_protocol_tcp) {
@@ -275,20 +272,17 @@ int nat_handlepacket(struct sr_instance* sr,
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
 
       sr_tcp_hdr_t *tcp_hdr = get_tcp_hdr(packet, len, data_size); 
-      if (!tcp_hdr) {
-        return -1;
-      }
 
       int syn = ntohs(tcp_hdr->tcp_off) & TCP_SYN;
       int ack = ntohs(tcp_hdr->tcp_off) & TCP_ACK;
       int fin = ntohs(tcp_hdr->tcp_off) & TCP_FIN;
       int rst = ntohs(tcp_hdr->tcp_off) & TCP_RST;
 
-      if (!strcmp(interface, INTER_IF)) {
+      if (!strcmp(interface, INT_IF)) {
         
         uint32_t ip_int = ip_hdr->ip_src;
         uint16_t aux_int = tcp_hdr->tcp_src_port;
-        uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
+        uint32_t ip_ext = sr_get_interface(sr, EXT_IF)->ip;
 
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_tcp);
         if (!nat_mapping) {
@@ -296,10 +290,10 @@ int nat_handlepacket(struct sr_instance* sr,
           nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_tcp);
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
-        uint32_t ip_remote = ip_hdr->ip_dst;
-        uint16_t aux_remote = tcp_hdr->tcp_dest_port;
+        uint32_t ip_dst = ip_hdr->ip_dst;
+        uint16_t aux_dst = tcp_hdr->tcp_dest_port;
 
-        update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
+        update_tcp_conection(nat, ip_dst, aux_dst, ip_int, aux_int, syn, ack, fin, rst);
 
         /* Rewrite */
         ip_hdr->ip_src = ip_ext;
@@ -309,8 +303,9 @@ int nat_handlepacket(struct sr_instance* sr,
         sr_create_tcp_checksum(packet, len);
         
         free(nat_mapping);
-      } else if (!strcmp(interface, EXTER_IF)) {
+      } else if (!strcmp(interface, EXT_IF)) {
         
+        /* TODO: This is probably where unsolicited inbound syn packets should be dealt with or marked. See sr_nat_clean for more info */
         uint16_t aux_ext = tcp_hdr->tcp_dest_port;
         uint32_t ip_remote = ip_hdr->ip_src;
         uint16_t aux_remote = tcp_hdr->tcp_src_port;
@@ -318,13 +313,13 @@ int nat_handlepacket(struct sr_instance* sr,
 
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp);
         if (!nat_mapping) {
-          uint8_t *icmp_data = (uint8_t *) malloc(ICMP_DATA_SIZE);
-          memcpy_byte_by_byte(icmp_data, ip_hdr, ICMP_DATA_SIZE);
-          sr_nat_insert_mapping(nat, 0, ip_remote, aux_ext, nat_mapping_tcp, EXTER_MAP, icmp_data);
-          return 2;
+          /* TODO: This is a very odd case. The nat recieves an external tcp packet but doesn't have a mapping for it... 
+          Corresponds to unsolicited syn packet. What if the TCP packet is not syn?
+          This should definitely return here since we do not know the internal ip or port*/
+          sr_nat_insert_mapping(nat, ip_remote, aux_remote, 0, nat_mapping_tcp);
         }
 
-        update_tcp_conection(nat, ip_ext, aux_ext, ip_remote, aux_remote, syn, ack, fin, rst);
+        update_tcp_conection(nat, ip_remote, aux_remote, nat_mapping->ip_int, nat_mapping->aux_int, syn, ack, fin, rst);
 
         /* Rewrite */
         ip_hdr->ip_dst = nat_mapping->ip_int;
@@ -343,20 +338,19 @@ int nat_handlepacket(struct sr_instance* sr,
       
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
 
-      sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet, len, data_size);
-
-      if (!strcmp(interface, INTER_IF)) {
-        /* Internal ICMP packet */
+      struct sr_icmp_r_hdr_t * icmp_hdr = (sr_icmp_r_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      
+      if (!strcmp(interface, INT_IF)) {
+        /* Internal to External ICMP packet*/
         
         uint32_t ip_int = ip_hdr->ip_src;
         uint16_t aux_int = icmp_hdr->icmp_id;
-        uint32_t ip_ext = sr_get_interface(sr, EXTER_IF)->ip;
+        uint32_t ip_ext = sr_get_interface(sr, EXT_IF)->ip;
 
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
         if (!nat_mapping) {
           /* Mapping not found for (ip, port), create new one */
           nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp);
-          
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
         
@@ -364,19 +358,19 @@ int nat_handlepacket(struct sr_instance* sr,
         /* Rewrite */
         ip_hdr->ip_src = ip_ext;
         icmp_hdr->icmp_id = aux_ext;
-
-        memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
+        
+        icmp_hdr->icmp_sum = 0;
         icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
 
         free(nat_mapping);
-      } else if (!strcmp(interface, EXTER_IF)) {
+      } else if (!strcmp(interface, EXT_IF)) {
         /* External ICMP packet */
         
         uint16_t aux_ext = icmp_hdr->icmp_id;
 
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_icmp);
         if (!nat_mapping) {
-         
+         /* TODO: should this send a reply if this was an echo request? */
           return 1;
         }
 
@@ -384,8 +378,8 @@ int nat_handlepacket(struct sr_instance* sr,
         ip_hdr->ip_dst = nat_mapping->ip_int;
         icmp_hdr->icmp_id = nat_mapping->aux_int;
 
-        memset(&(icmp_hdr->icmp_sum), 0, sizeof(uint16_t));
-        icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t) + data_size);
+        icmp_hdr->icmp_sum = 0;
+        icmp_hdr->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
 
         free(nat_mapping);
       }
@@ -417,7 +411,7 @@ void sr_create_tcp_checksum(uint8_t *packet, unsigned int len) {
         uint8_t *buffer = malloc(sizeof(bufferSize));
         
         /*Copy pseudoheader, tcp header and data into the buffer */
-        memcpy(buffer, pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t);
+        memcpy(buffer, pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t));
         memcpy(buffer + sizeof(sr_pseudo_hdr_t), packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), pseduo_tcp_hdr->tcp_len);
 
         tcp_hdr->tcp_sum = cksum(buffer, bufferSize);
@@ -425,6 +419,7 @@ void sr_create_tcp_checksum(uint8_t *packet, unsigned int len) {
         free(buffer);
 }
 
+/* Periodic cleaning of the NAT */
 void sr_nat_clean(struct sr_nat *nat, time_t curtime) {
     struct sr_nat_mapping *mapping_walker = nat->mappings;
     struct sr_nat_mapping *previous_mapping = NULL;
@@ -448,7 +443,7 @@ void sr_nat_clean(struct sr_nat *nat, time_t curtime) {
             while (conn_walker) {
                 /* First lets clean any unsolicited inbound SYN packets TODO: Unsure if this is the proper way to check for an inbound syn
                     packet. We may want to add a new connection state SYN to confirm */
-                if (mapping_walker->direction_type == EXTERNAL && conn_walker->state == TRANS) {
+                if (conn_walker->state == TRANS) {
                     if (difftime(curtime, mapping_walker->last_updated) > 6.0) {
                        /* - TODO: This branch will be executed when an unsolicited inboud syn packet has not been responded to in 6 seconds.
                        The code should remove the connection and send an ICMP type 3 code 3 to the source specified in the unacked packet. */                       continue;

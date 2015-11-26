@@ -13,7 +13,6 @@
 
 #include <stdio.h>
 #include <assert.h>
-/* not for test git*/
 
 #include "sr_if.h"
 #include "sr_rt.h"
