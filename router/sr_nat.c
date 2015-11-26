@@ -292,7 +292,7 @@ int nat_handlepacket(struct sr_instance* sr,
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_tcp);
         if (!nat_mapping) {
           /* Mapping not found for (ip, port), create new one */
-          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_tcp, INTERNAL, NULL);
+          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_tcp);
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
         uint32_t ip_remote = ip_hdr->ip_dst;
@@ -354,7 +354,7 @@ int nat_handlepacket(struct sr_instance* sr,
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_internal(nat, ip_int, aux_int, nat_mapping_icmp);
         if (!nat_mapping) {
           /* Mapping not found for (ip, port), create new one */
-          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp, INTERNAL, NULL);
+          nat_mapping = sr_nat_insert_mapping(nat, ip_int, ip_ext, aux_int, nat_mapping_icmp);
           
         }
         uint16_t aux_ext = nat_mapping->aux_ext;
