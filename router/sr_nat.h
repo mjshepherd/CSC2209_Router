@@ -80,7 +80,7 @@ struct sr_nat_mapping *sr_nat_lookup_internal(struct sr_nat *nat,
 /* Insert a new mapping into the nat's mapping table.
    You must free the returned structure if it is not NULL. */
 struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
-  uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type );
+  uint32_t ip_int, uint32_t ip_ext, uint16_t aux_int, sr_nat_mapping_type type);
 
 /* NAT cron job. Runs every second and is used to clean defunct mappings */
 void sr_nat_clean(struct sr_nat *nat, time_t time);
