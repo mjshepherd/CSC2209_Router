@@ -271,7 +271,7 @@ int sr_nat_translate_packet(struct sr_instance* sr,
      
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_tcp_hdr_t);
 
-      sr_tcp_hdr_t *tcp_hdr = get_tcp_hdr(packet, len, data_size); 
+      sr_tcp_hdr_t *tcp_hdr = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
       int syn = ntohs(tcp_hdr->tcp_off) & TCP_SYN;
       int ack = ntohs(tcp_hdr->tcp_off) & TCP_ACK;
@@ -338,7 +338,7 @@ int sr_nat_translate_packet(struct sr_instance* sr,
       
       uint16_t data_size = ntohs(ip_hdr->ip_len) - sizeof(sr_ip_hdr_t) - sizeof(sr_icmp_hdr_t);
 
-      struct sr_icmp_r_hdr_t * icmp_hdr = (sr_icmp_r_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+      sr_icmp_r_hdr_t * icmp_hdr = (sr_icmp_r_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
       
       if (!strcmp(interface, INT_IF)) {
         /* Internal to External ICMP packet*/
@@ -379,7 +379,7 @@ int sr_nat_translate_packet(struct sr_instance* sr,
         icmp_hdr->icmp_id = nat_mapping->aux_int;
 
         icmp_hdr->icmp_sum = 0;
-        icmp_hdr->icmp_sum = cksum(icmpHeader, ntohs(ipHeader->ip_len) - ipHeader->ip_hl*4);
+        icmp_hdr->icmp_sum = cksum(icmp_hdr, ntohs(ip_hdr->ip_len) - ip_hdr->ip_hl*4);
 
         free(nat_mapping);
       }
@@ -400,19 +400,19 @@ void sr_create_tcp_checksum(uint8_t *packet, unsigned int len) {
        
         memset(&(tcp_hdr->tcp_sum), 0, sizeof(uint16_t));
         
-        struct sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr;
+        sr_pseudo_tcp_hdr_t *pseudo_tcp_hdr;
         pseudo_tcp_hdr->src_addr = ip_hdr->ip_src;
         pseudo_tcp_hdr->dst_addr = ip_hdr->ip_dst;
         pseudo_tcp_hdr->zeros = 0;
-        pseudo_tcp_hdr->proto = ip_protocol_tcp;
+        pseudo_tcp_hdr->ip_proto = ip_protocol_tcp;
         pseudo_tcp_hdr->tcp_len = len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
 
-        int bufferSize = sizeof(sr_psude_tcp_hdr_t) + len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
+        int bufferSize = sizeof(sr_pseudo_tcp_hdr_t) + len - sizeof(sr_ethernet_hdr_t) - sizeof(sr_ip_hdr_t);
         uint8_t *buffer = malloc(sizeof(bufferSize));
         
         /*Copy pseudoheader, tcp header and data into the buffer */
         memcpy(buffer, pseudo_tcp_hdr, sizeof(sr_pseudo_tcp_hdr_t));
-        memcpy(buffer + sizeof(sr_pseudo_hdr_t), packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), pseduo_tcp_hdr->tcp_len);
+        memcpy(buffer + sizeof(sr_pseudo_tcp_hdr_t), packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), pseudo_tcp_hdr->tcp_len);
 
         tcp_hdr->tcp_sum = cksum(buffer, bufferSize);
         
@@ -454,7 +454,7 @@ void sr_nat_clean(struct sr_nat *nat, time_t curtime) {
                 }
                 /* Check for inactive connections and drop if needed */
                 double timediff = difftime(curtime, conn_walker->last_updated);
-                if( (conn_walker->state == ESTAB && timediff > tcp_establish_timeout) || (conn_walker->state == TRANS && timediff > tcp_trans_timeout)) {
+                if( (conn_walker->state == ESTAB && timediff > nat->tcp_establish_timeout) || (conn_walker->state == TRANS && timediff > nat->tcp_trans_timeout)) {
                     if (prev_conn) {
                         prev_conn->next = conn_walker->next;
                         free(conn_walker);
@@ -471,7 +471,7 @@ void sr_nat_clean(struct sr_nat *nat, time_t curtime) {
                 conn_walker = conn_walker->next;
             }/* End of conn walker loop */
         } /* End of if mapping_walker is type TCP */
-        else if (mapping_walker->type = nat_mapping_icmp && (difftime(mapping_walker->last_updated, curtime) > icmp_timeout)) {
+        else if (mapping_walker->type = nat_mapping_icmp && (difftime(mapping_walker->last_updated, curtime) > nat->icmp_timeout)) {
             if (previous_mapping) {
                 previous_mapping->next = mapping_walker->next;
                 free(mapping_walker);
