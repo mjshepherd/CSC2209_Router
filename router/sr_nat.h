@@ -19,8 +19,13 @@ typedef enum {
 typedef enum {
   ESTAB,
   TRANS,
+  UNSOLICITED
 } sr_nat_tcp_state;
 
+typedef enum {
+  INT_TO_EXT,
+  EXT_TO_INT
+} sr_nat_tcp_flow_dir;
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
@@ -85,10 +90,10 @@ uint16_t calculate_external_port(uint32_t ip_int, uint16_t aux_int);
 
 struct sr_nat_connection* create_connection(int32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int);
 
-sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst);
+sr_nat_tcp_state calculate_tcp_state(int syn, int ack, int fin, int rst, sr_nat_tcp_flow_dir dir);
 
 void update_tcp_conection(struct sr_nat *nat, uint32_t ip_ext, uint16_t aux_ext, uint32_t ip_int, uint16_t aux_int, 
-                          int syn, int ack, int fin, int rst);
+                          int syn, int ack, int fin, int rst, sr_nat_tcp_flow_dir dir);
 
 int sr_nat_translate_packet(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface/* lent */);
 
