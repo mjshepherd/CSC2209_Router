@@ -633,7 +633,7 @@ uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t i
   
 	if (!icmp_packet) 
 	{
-		printf ("ERROR: Fail to create ICMP reply packet\n");
+		printf ("ERROR: Failed to create ICMP reply packet\n");
 		return NULL;
 	}
 
@@ -641,6 +641,7 @@ uint8_t *create_icmp_packet(struct sr_instance* sr, uint8_t icmp_type, uint8_t i
 
 	if (icmp_type == 3 && icmp_code == 3)
 	{
+		printf("---------------->ICMP Type 3 Code 3 in construction\n");
 		ip_src = icmp33_src;
 	}
 	else
