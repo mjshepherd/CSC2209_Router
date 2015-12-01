@@ -523,8 +523,11 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
         struct sr_if *  outgoing_interface = sr_get_interface(sr, rt->interface);
         
 
-
-        ip_hdr.ip_src = outgoing_interface->ip;  
+		if (code == 3 && type == 3){
+			ip_hdr.ip_src = ipHeader->ip_dst;
+		}else{
+			ip_hdr.ip_src = outgoing_interface->ip;
+		}
 
 
         printf("===========EXISTANT \n"  );
@@ -532,14 +535,12 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 
         ip_hdr.ip_sum = cksum(&ip_hdr, sizeof(ip_hdr));
 
-        printf("============== new ip header info\n");
+        printf("=========== new ip header info\n");
         print_hdr_ip((uint8_t*)&ip_hdr);
         
-        printf("============== new icmp header info\n");
+        printf("=========== new icmp header info\n");
         print_hdr_icmp((uint8_t*)&icmp3Header);
         
-        printf("============== new icmp header info\n");
-        print_hdr_icmp((uint8_t*)&icmp3Header);
         
            
             
