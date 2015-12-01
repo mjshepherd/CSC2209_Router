@@ -146,12 +146,14 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
     struct sr_arpreq *req;
     for (req = cache->requests; req != NULL; req = req->next) {
         if (req->ip == ip) {
+			printf("INFO: queuereq: IP found\n");
             break;
         }
     }
     
     /* If the IP wasn't found, add it */
     if (!req) {
+		printf("INFO: queuereq: IP not found, adding.\n");
         req = (struct sr_arpreq *) calloc(1, sizeof(struct sr_arpreq));
         req->ip = ip;
         req->next = cache->requests;
