@@ -395,18 +395,20 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     
     unsigned int eth_pkt_len;
     
-	if (icmp_error_type == 3){
-		printf("INFO:Sending ICMP3,3 payload");
-		sr_send_icmp(sr,packet,len,3,3);
-		return;
-	}
+	
 	
     /* Look up shortest prefix match in the routing table. */
     struct in_addr dest_ip_ad;
     dest_ip_ad.s_addr = destination_ip;
     rt = sr_longest_prefix_match(sr, dest_ip_ad);
     if (!rt) {
-        printf("ERROR: Could not find an appropriate egress interface. Dropping. Sending ICMP type 3 code 0.\n");
+		printf("ERROR: Could not find an appropriate egress interface. Dropping.\n");
+		if (icmp_error_type == 3){
+			printf("Sending ICMP type 3 code 3\n");
+			sr_send_icmp(sr,packet,len,3,3);
+			return;
+		}
+        printf("Sending ICMP type 3 code 0.\n");
         sr_send_icmp(sr, packet, len, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_ZERO);
         return;
     }
@@ -523,7 +525,7 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
         struct sr_if *  outgoing_interface = sr_get_interface(sr, rt->interface);
         
 
-		if (code == 3 && type == 3){
+		if (code == 3 && type == 3  && ipHeader->ip_p == ip_protocol_tcp ){
 			ip_hdr.ip_src = ipHeader->ip_dst;
 		}else{
 			ip_hdr.ip_src = outgoing_interface->ip;
