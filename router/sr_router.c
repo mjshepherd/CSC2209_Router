@@ -220,15 +220,20 @@ void sr_handlepacket(struct sr_instance* sr,
             ip_packet_len = ntohs(ipHeader->ip_len);;
             if (ipHeader->ip_ttl == 0) 
             {
+				printf("INFO: TTL is 0, sending ICMP timeout message.");
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ip_packet_len, ICMP_TYPE_TIME_EXCEED, ICMP_CODE_ZERO);
                 return;
             }
-    
+			
             /* Update the checksum. */
             ipHeader->ip_sum = 0;
             ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
-
-            sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 0, ethertype_ip);
+			
+			if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp){
+				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 3, ethertype_ip);
+			}else{
+				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 0, ethertype_ip);
+			}
             return;
         }
         
@@ -289,7 +294,9 @@ void sr_handlepacket(struct sr_instance* sr,
             
             while (cur != 0) 
             {
+				
                 ip_hdr = (struct sr_ip_hdr *)cur->buf;
+				printf ("INFO: sending Ethernet packet\n");
                 sr_send_ethernet_packet(sr,  cur->buf,  cur->len,  ip_hdr->ip_dst, 0,  ethertype_ip);
                 cur = cur->next;
             }
@@ -388,6 +395,12 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     
     unsigned int eth_pkt_len;
     
+	if (icmp_error_type == 3){
+		printf("INFO:Sending ICMP3,3 payload");
+		sr_send_icmp(sr,packet,len,3,3);
+		return;
+	}
+	
     /* Look up shortest prefix match in the routing table. */
     struct in_addr dest_ip_ad;
     dest_ip_ad.s_addr = destination_ip;
