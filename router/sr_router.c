@@ -229,7 +229,7 @@ void sr_handlepacket(struct sr_instance* sr,
             ipHeader->ip_sum = 0;
             ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
 			
-			if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp){
+			if (ipHeader->ip_p == ip_protocol_tcp){
 				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 3, ethertype_ip);
 			}else{
 				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 0, ethertype_ip);
