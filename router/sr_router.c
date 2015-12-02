@@ -550,9 +550,9 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
         printf("=========== new icmp header info\n");
         print_hdr_icmp((uint8_t*)&icmp3Header);
         
-        printf("=========== Data field\n");
+        printf("=========== Data field, (only first 8 bytes of TCP header are relevant.)\n");
         print_hdr_ip(((uint8_t*)&icmp3Header) + sizeof(icmp3Header) - 28);
-           
+        print_hdr_tcp(((uint8_t*)&icmp3Header) + sizeof(icmp3Header) - 8);   
             
         total_len = sizeof(ip_hdr) + sizeof(icmp3Header);
         printf("========total length of new ip packet is %d\n", total_len);
