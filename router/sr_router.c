@@ -118,14 +118,13 @@ void sr_handlepacket(struct sr_instance* sr,
 
 
         sr_ip_hdr_t * ipHeader = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+        print_hdr_ip(ipHeader);
         if (len < sizeof(sr_ethernet_hdr_t) + ipHeader->ip_hl*4)
         {
             printf("ERROR: Ethernet frame did not meet minimum Ethernet + IP calculated length. Dropping. \n");
             return;
         } 
         
-        /*print_hdr_ip((uint8_t *)&ipHeader);*/
-		
         uint16_t expected_ip_cksum;
         uint16_t received_ip_cksum;
         /* Validate checksum. */
@@ -137,8 +136,9 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("ERROR: IP packet checksum. Dropping. \n");
             return;
         }
-        /* End of IP packet checking*/
+        /* End of IP packet checking, set ip cksum back to original value.*/
         
+        ipHeader->ip_sum = received_ip_cksum;
 
         /* NAT TRANSLATION */
         if (sr->nat_enabled) {
@@ -200,7 +200,7 @@ void sr_handlepacket(struct sr_instance* sr,
             }/* End for IP packet is an ICMP packet.*/
             else if (ipHeader->ip_p == ip_protocol_tcp || ipHeader->ip_p == ip_protocol_udp)
             {   /*Port unreachable (type 3, code 3) */
-                
+                printf("INFO: IP protocol is TCP or UDP\n");
                 sr_send_icmp(sr, (uint8_t *)ipHeader, ntohs(ipHeader->ip_len), ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_THREE);
             }
             else
@@ -215,12 +215,17 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("INFO: Packet destined elsewhere; Beginning forwarding logic for IP packet.\n");
             uint8_t *forward_ip_packet;
             unsigned int ip_packet_len;
-
+            ip_packet_len = ntohs(ipHeader->ip_len);;
+			
+			if (ipHeader->ip_p == ip_protocol_tcp){
+				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 3, ethertype_ip);
+				return;
+			}
             /* Update the ip header ttl. */
             ipHeader->ip_ttl--;
     
             /* If the ttl is equal to 0, send an ICMP Time exceeded response and return. */
-            ip_packet_len = ntohs(ipHeader->ip_len);;
+            
             if (ipHeader->ip_ttl == 0) 
             {
 				printf("INFO: TTL is 0, sending ICMP timeout message.");
@@ -232,11 +237,8 @@ void sr_handlepacket(struct sr_instance* sr,
             ipHeader->ip_sum = 0;
             ipHeader->ip_sum = cksum(ipHeader, ipHeader->ip_hl*4);
 			
-			if (ipHeader->ip_p == ip_protocol_tcp){
-				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 3, ethertype_ip);
-			}else{
-				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 0, ethertype_ip);
-			}
+			sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 0, ethertype_ip);
+			
             return;
         }
         
@@ -393,7 +395,6 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     struct sr_arpreq *arp_req;
     struct sr_ethernet_hdr eth_hdr;
     struct sr_arpentry *arp_entry;
-
     uint8_t *ip_pkt;
     uint8_t *eth_pkt;
     struct sr_if *outgoing_interface;
@@ -408,11 +409,6 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     rt = sr_longest_prefix_match(sr, dest_ip_ad);
     if (!rt) {
 		printf("ERROR: Could not find an appropriate egress interface. Dropping.\n");
-		/*if (icmp_error_type == 3){
-			printf("Sending ICMP type 3 code 3\n");
-			sr_send_icmp(sr,packet,len,3,3);
-			return;
-		}*/
         printf("Sending ICMP type 3 code 0.\n");
         sr_send_icmp(sr, packet, len, ICMP_TYPE_DEST_UNREACHABLE, ICMP_CODE_ZERO);
         return;
@@ -452,8 +448,9 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     } else { /* Otherwise add it to the arp request queue. */
         printf("INFO: Destination was not found in the arpcache. Adding packet to queue.\n");
         ip_pkt = malloc(len);
+        printf ("malloc successful\n");
         memcpy(ip_pkt, packet, len);
-		
+		printf ("memcpy successful\n");
 		printf("=========== new ip header info\n");
         print_hdr_ip(ip_pkt);
 		
@@ -553,7 +550,8 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
         printf("=========== new icmp header info\n");
         print_hdr_icmp((uint8_t*)&icmp3Header);
         
-        
+        printf("=========== Data field\n");
+        print_hdr_ip(((uint8_t*)&icmp3Header) + sizeof(icmp3Header) - 28);
            
             
         total_len = sizeof(ip_hdr) + sizeof(icmp3Header);
