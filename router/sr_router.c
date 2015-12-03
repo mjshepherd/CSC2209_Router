@@ -134,7 +134,8 @@ void sr_handlepacket(struct sr_instance* sr,
             printf("ERROR: IP packet checksum. Dropping. \n");
             return;
         }
-        /* End of IP packet checking*/
+        /* End of IP packet checking, reset ip checksum*/
+        ipHeader->ip_sum = received_ip_cksum;
         
 
         /* NAT TRANSLATION */

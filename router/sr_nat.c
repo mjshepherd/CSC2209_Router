@@ -287,7 +287,11 @@ int sr_nat_translate_packet(struct sr_instance* sr,
       int rst = ntohs(tcp_hdr->tcp_off) & TCP_RST;
 
       if (!strcmp(interface, INT_IF)) {
-        
+        /* First check to see if the destination is one of the router's interfaces. If it is DO NOT TRANSLATE */
+        if ( ip_hdr->ip_dst == sr_get_interface(sr, INT_IF)->ip || ip_hdr->ip_dst == sr_get_interface(sr, EXT_IF)->ip) {
+            fprintf(stderr, "INFO:NAT: TCP packet was destined for on of the router's interfaces. Not translating. \n");
+            return 0;
+        }        
         uint32_t ip_int = ip_hdr->ip_src;
         uint16_t aux_int = tcp_hdr->tcp_src_port;
         uint32_t ip_ext = sr_get_interface(sr, EXT_IF)->ip;
