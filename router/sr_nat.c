@@ -322,10 +322,10 @@ int sr_nat_translate_packet(struct sr_instance* sr,
         uint32_t ip_ext = ip_hdr->ip_dst;
         
         struct sr_nat_mapping *nat_mapping = sr_nat_lookup_external(nat, aux_ext, nat_mapping_tcp);
-        if (!nat_mapping) {
+        if (!nat_mapping || ntohs(aux_remote) <= 1024) {
           /* TODO: This is a very odd case. The nat recieves an external tcp packet but doesn't have a mapping for it... 
           This should definitely return here since we do not know the internal ip or port*/
-          fprintf(stderr, "WARNING: No mapping exists for the inbound TCP packet...\n");
+          fprintf(stderr, "WARNING: Unable to translate inbound TCP packet. Packet either specifies a well known port or no mapping exists.\n");
           return -1;
         }
         
@@ -462,9 +462,10 @@ void sr_nat_clean(struct sr_nat *nat, time_t curtime) {
                 /* First lets clean any unsolicited inbound SYN packets TODO: Unsure if this is the proper way to check for an inbound syn
                     packet. We may want to add a new connection state SYN to confirm */
                 if (conn_walker->state == UNSOLICITED) {
-                    if (difftime(curtime, mapping_walker->last_updated) > 6.0) {
+                    if (difftime(curtime, conn_walker->last_updated) > 6.0) {
                        /* - TODO: This branch will be executed when an unsolicited inboud syn packet has not been responded to in 6 seconds.
-                       The code should remove the connection and send an ICMP type 3 code 3 to the source specified in the unacked packet. */                       continue;
+                       The code should remove the connection and send an ICMP type 3 code 3 to the source specified in the unacked packet. */
+                       continue;
                     }
                 }
                 /* Check for inactive connections and drop if needed */

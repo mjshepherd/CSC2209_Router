@@ -217,10 +217,6 @@ void sr_handlepacket(struct sr_instance* sr,
             unsigned int ip_packet_len;
             ip_packet_len = ntohs(ipHeader->ip_len);;
 			
-			if (ipHeader->ip_p == ip_protocol_tcp){
-				sr_send_ethernet_packet(sr, ipHeader, ip_packet_len, ipHeader->ip_dst, 3, ethertype_ip);
-				return;
-			}
             /* Update the ip header ttl. */
             ipHeader->ip_ttl--;
     
@@ -448,9 +444,7 @@ void sr_send_ethernet_packet(struct sr_instance* sr,
     } else { /* Otherwise add it to the arp request queue. */
         printf("INFO: Destination was not found in the arpcache. Adding packet to queue.\n");
         ip_pkt = malloc(len);
-        printf ("malloc successful\n");
         memcpy(ip_pkt, packet, len);
-		printf ("memcpy successful\n");
 		printf("=========== new ip header info\n");
         print_hdr_ip(ip_pkt);
 		
@@ -539,21 +533,8 @@ void sr_send_icmp(struct sr_instance* sr, uint8_t *packet, unsigned int len, uin
 			ip_hdr.ip_src = outgoing_interface->ip;
 		}
 
-
-        printf("===========EXISTANT \n"  );
-        
         ip_hdr.ip_sum = cksum(&ip_hdr, sizeof(ip_hdr));
 
-        printf("=========== new ip header info\n");
-        print_hdr_ip((uint8_t*)&ip_hdr);
-        
-        printf("=========== new icmp header info\n");
-        print_hdr_icmp((uint8_t*)&icmp3Header);
-        
-        printf("=========== Data field, (only first 8 bytes of TCP header are relevant.)\n");
-        print_hdr_ip(((uint8_t*)&icmp3Header) + sizeof(icmp3Header) - 28);
-        print_hdr_tcp(((uint8_t*)&icmp3Header) + sizeof(icmp3Header) - 8);   
-            
         total_len = sizeof(ip_hdr) + sizeof(icmp3Header);
         printf("========total length of new ip packet is %d\n", total_len);
             
