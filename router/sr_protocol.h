@@ -88,6 +88,15 @@ struct sr_icmp_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_hdr sr_icmp_hdr_t;
 
+/*Structure of an ICMP echo request/reply */
+struct sr_icmp_r_hdr {
+    uint8_t icmp_type;
+    uint8_t icmp_code;
+    uint16_t icmp_sum;
+    uint16_t icmp_id;
+    uint16_t icmp_seq;
+} __attribute__ ((packed)) ;
+typedef struct sr_icmp_r_hdr sr_icmp_r_hdr_t;
 
 /* Structure of a type3 ICMP header
  */
@@ -101,41 +110,17 @@ struct sr_icmp_t3_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
+/*structure of a type11 ICMP header
+*/
+struct sr_icmp_t11_hdr {
+  uint8_t icmp_type;
+  uint8_t icmp_code;
+  uint16_t icmp_sum;
+  uint32_t unused;
+  uint8_t data[ICMP_DATA_SIZE];
 
-/* 
- * Structure of an TCP header
- */
-struct sr_tcp_hdr
-  {
-    uint16_t tcp_src_port;
-    uint16_t tcp_dest_port;
-    uint32_t tcp_seq_num;
-    uint32_t tcp_ack_num;
-    uint16_t tcp_off;
-#define TCP_NS 0x0100
-#define TCP_CWR 0x0080
-#define TCP_ECE 0x0040
-#define TCP_URG 0x0020
-#define TCP_ACK 0x0010
-#define TCP_PSH 0x0008
-#define TCP_RST 0x0004
-#define TCP_SYN 0x0002
-#define TCP_FIN 0x0001
-    uint16_t tcp_window_size;
-    uint16_t tcp_sum;
-    uint16_t tcp_urg;
-  } __attribute__ ((packed)) ;
-typedef struct sr_tcp_hdr sr_tcp_hdr_t;
-
-struct sr_pseudo_tcp_hdr
-  {
-    uint32_t src_addr;
-    uint32_t dst_addr;
-    uint8_t zeros;
-    uint8_t proto;
-    uint16_t tcp_len;
-  } __attribute__ ((packed)) ;
-typedef struct sr_pseudo_tcp_hdr sr_pseudo_tcp_hdr_t;
+} __attribute__ ((packed)) ;
+typedef struct sr_icmp_t11_hdr sr_icmp_t11_hdr_t;
 
 /*
  * Structure of an internet header, naked of options.
@@ -222,6 +207,40 @@ struct sr_arp_hdr
     uint32_t        ar_tip;             /* target IP address            */
 } __attribute__ ((packed)) ;
 typedef struct sr_arp_hdr sr_arp_hdr_t;
+
+/* Structure of a TCP Header */
+struct sr_tcp_hdr
+  {
+    uint16_t tcp_src_port;
+    uint16_t tcp_dest_port;
+    uint32_t tcp_seq_num;
+    uint32_t tcp_ack_num;
+    uint16_t tcp_off;
+#define TCP_NS 0x0100
+#define TCP_CWR 0x0080
+#define TCP_ECE 0x0040
+#define TCP_URG 0x0020
+#define TCP_ACK 0x0010
+#define TCP_PSH 0x0008
+#define TCP_RST 0x0004
+#define TCP_SYN 0x0002
+#define TCP_FIN 0x0001
+    uint16_t tcp_window_size;
+    uint16_t tcp_sum;
+    uint16_t tcp_urg;
+  } __attribute__ ((packed)) ;
+typedef struct sr_tcp_hdr sr_tcp_hdr_t;
+
+/* Structure of a TCP pseudoheader */
+struct sr_pseudo_tcp_hdr
+  {
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint8_t zeros;
+    uint8_t ip_proto;
+    uint16_t tcp_len;
+  } __attribute__ ((packed)) ;
+typedef struct sr_pseudo_tcp_hdr sr_pseudo_tcp_hdr_t;
 
 #define sr_IFACE_NAMELEN 32
 

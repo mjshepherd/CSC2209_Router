@@ -45,6 +45,10 @@ extern char* optarg;
 #define DEFAULT_SERVER "localhost"
 #define DEFAULT_RTABLE "rtable"
 #define DEFAULT_TOPO 0
+#define DEFAULT_NAT_ENABLED 0
+#define DEFAULT_ICMP_TIMEOUT 60
+#define DEFAULT_TCP_ESTABLISH_TIMEOUT 7440
+#define DEFAULT_TRANS_TIMEOUT 300
 
 #define DEFAULT_NAT_ENABLED 0
 #define DEFAULT_ICMP_TIMEOUT 60
@@ -77,10 +81,13 @@ int main(int argc, char **argv)
     unsigned int tcp_establish_timeout = DEFAULT_TCP_ESTABLISH_TIMEOUT;
     unsigned int tcp_trans_timeout = DEFAULT_TRANS_TIMEOUT;
     struct sr_instance sr;
-
+    unsigned int nat_enabled = DEFAULT_NAT_ENABLED;
+    unsigned int icmp_timeout = DEFAULT_ICMP_TIMEOUT;
+    unsigned int tcp_establish_timeout = DEFAULT_TCP_ESTABLISH_TIMEOUT;
+    unsigned int tcp_trans_timeout = DEFAULT_TRANS_TIMEOUT;
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:nI:E:R:")) != EOF)
+    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:n")) != EOF)
     {
         switch (c)
         {
@@ -112,9 +119,9 @@ int main(int argc, char **argv)
             case 'T':
                 template = optarg;
                 break;
-            case 'n':
-                fprintf(stderr, "NAT enabled.\n");
+            case 'n':   
                 nat_enabled = 1;
+                fprintf(stderr, "NAT Enabled. \n");
                 break;
             case 'I':
                 icmp_timeout = atoi((char *) optarg);
@@ -131,8 +138,9 @@ int main(int argc, char **argv)
     /* -- zero out sr instance/nat instance -- */
     sr_init_instance(&sr);
 
-    sr.nat.sr = &sr;
+    /* -- set up nat parameters --*/
     sr.nat_enabled = nat_enabled;
+    sr.nat.sr = &sr;
     sr.nat.icmp_timeout = icmp_timeout;
     sr.nat.tcp_establish_timeout = tcp_establish_timeout;
     sr.nat.tcp_trans_timeout = tcp_trans_timeout;
@@ -282,6 +290,15 @@ static void sr_destroy_instance(struct sr_instance* sr)
     */
 } /* -- sr_destroy_instance -- */
 
+static void nat_init_instance(struct sr_nat* nat) {
+    /* REQUIRES */
+    assert(nat);
+
+    nat->icmp_timeout = 0;
+    nat->tcp_establish_timeout = 0;
+    nat->tcp_trans_timeout = 0;
+}
+
 /*-----------------------------------------------------------------------------
  * Method: sr_init_instance(..)
  * Scope: Local
@@ -301,8 +318,8 @@ static void sr_init_instance(struct sr_instance* sr)
     sr->if_list = 0;
     sr->routing_table = 0;
     sr->logfile = 0;
-
-    nat_init_instance(&(sr->nat));
+ 
+   nat_init_instance(&(sr->nat));
 } /* -- sr_init_instance -- */
 
 static void nat_init_instance(struct sr_nat* nat) {
